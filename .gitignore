@@ -1,0 +1,23 @@
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.blg
+*.toc
+*.nav
+*.snm
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.bcf
+*.run.xml
+*.lof
+*.lot
+
+# OS / editor
+.DS_Store
+*~
+*.swp
+
+# Not tracked: compiled PDFs of the main manuscript (Overleaf builds these)
+main.pdf

@@ -1,4 +1,4 @@
-\begin{thebibliography}{13}
+\begin{thebibliography}{15}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -11,6 +11,15 @@ Ansari, A.~F., Stella, L., Turkmen, C., Zhang, X., Mercado, P., Shen, H.,
   Shchur, O., Rangapuram, S.~S., Arango, S.~P., Kapoor, S., et~al.
 \newblock Chronos: Learning the language of time series.
 \newblock In \emph{ICML}, 2024.
+
+\bibitem[Auer et~al.(2025)Auer, Podest, Klotz, B{\"o}ck, Klambauer, and
+  Hochreiter]{auer2025tirex}
+Auer, A., Podest, P., Klotz, D., B{\"o}ck, S., Klambauer, G., and Hochreiter,
+  S.
+\newblock {TiRex}: Zero-shot forecasting across long and short horizons.
+\newblock In \emph{ICML Workshop on Foundation Models for Structured Data
+  (FMSD)}, 2025.
+\newblock URL \url{https://openreview.net/forum?id=cWrbpOZGRa}.
 
 \bibitem[Das et~al.(2024)Das, Kong, Leber, Mathews, and Sen]{das2024decoder}
 Das, A., Kong, W., Leber, A., Mathews, R., and Sen, R.
@@ -85,5 +94,14 @@ Vijay, T., Abid, K., Ansari, A.~F., et~al.
 Woo, G., Liu, C., Kumar, A., Xiong, C., Savarese, S., and Sahoo, D.
 \newblock Unified training of universal time series forecasting transformers.
 \newblock In \emph{ICML}, 2024.
+
+\bibitem[Zhang et~al.(2025)Zhang, Zeng, Zhang, Xu, Zheng, Gao, Jiang, and
+  Zheng]{zhang2025tsfmready}
+Zhang, Y., Zeng, Q., Zhang, Y., Xu, Z., Zheng, M., Gao, C., Jiang, M., and
+  Zheng, Z.
+\newblock Are time series foundation models ready for zero-shot forecasting?
+\newblock In \emph{ICML Workshop on Foundation Models for Structured Data
+  (FMSD)}, 2025.
+\newblock URL \url{https://openreview.net/forum?id=kQDzqIkXLO}.
 
 \end{thebibliography}

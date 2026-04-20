@@ -23,15 +23,18 @@
   \icmlsetsymbol{equal}{*}
 
   \begin{icmlauthorlist}
-    \icmlauthor{Anonymous Author(s)}{}
+    \icmlauthor{Anonymous Authors}{anon}
   \end{icmlauthorlist}
+
+  \icmlaffiliation{anon}{Anonymous Institution}
+  \icmlcorrespondingauthor{Anonymous Authors}{anon@anon.com}
 
   \icmlkeywords{Time Series, Forecasting, Preconditioning, Transformers}
 
   \vskip 0.3in
 ]
 
-\printAffiliationsAndNotice{}
+% \printAffiliationsAndNotice{} % Suppressed in anonymous submission — see note.
 
 \begin{abstract}
 Patch-based transformers for time series forecasting embed each patch independently, creating a cross-patch information bottleneck: temporal patterns spanning multiple patches must be recovered entirely through attention. We propose \textbf{polynomial hint preconditioning}, which applies a fixed Chebyshev FIR filter to the input and concatenates the result as an auxiliary channel before patching. This injects cross-patch temporal information with negligible overhead (12K parameters, 0.11\%). On GIFT-Eval (97 configurations, 5 seeds), our method improves geometric mean MASE by 2.9\% over the Moirai-2 Small baseline ($p < 10^{-15}$), winning 329/485 comparisons. Controlled ablations---duplicate channel \emph{hurts} (44.7\% wins), zero channel is neutral---confirm the improvement is driven by polynomial content. At 100K training steps, the benefit grows to 3.9\%.
@@ -126,7 +129,7 @@ At 100K steps (5 seeds), HD10 improves by 3.9\% over the baseline (0.8443 vs.\ 0
 \section{Related Work}
 %==============================================================================
 
-Time series foundation models \citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment} train on large corpora for zero-shot forecasting. Patch-based architectures \citep{nie2023patchtst,dosovitskiy2021image} are dominant, with PatchTST using overlapping patches to partially address the cross-patch bottleneck. Our approach is orthogonal: we inject cross-patch information via a fixed filter with no change to attention. The polynomial basis is motivated by universal sequence preconditioning \citep{marsden2024universal}, building on spectral filtering \citep{hazan2017learning,hazan2018spectral}. FIR filter design with Chebyshev polynomials is classical \citep{parks1972chebyshev,oppenheim1999discrete}.
+Time series foundation models \citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} train on large corpora for zero-shot forecasting, though recent work \citep{zhang2025tsfmready} questions whether current TSFMs meaningfully exceed simple classical baselines in the zero-shot regime---motivating interventions like ours that strengthen compact TSFMs at low parameter cost. Patch-based architectures \citep{nie2023patchtst,dosovitskiy2021image} are dominant, with PatchTST using overlapping patches to partially address the cross-patch bottleneck. Our approach is orthogonal: we inject cross-patch information via a fixed filter with no change to attention. The polynomial basis is motivated by universal sequence preconditioning \citep{marsden2024universal}, building on spectral filtering \citep{hazan2017learning,hazan2018spectral}. FIR filter design with Chebyshev polynomials is classical \citep{parks1972chebyshev,oppenheim1999discrete}.
 
 %==============================================================================
 \section{Conclusion}

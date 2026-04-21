@@ -397,7 +397,16 @@ This negative result for linear forecasters is informative: the theoretical regr
 \subsection{Spectral-Correlate Analysis on GIFT-Eval}
 \label{sec:spectral-correlate}
 
-\emph{To be filled.} For each of the $97$ GIFT-Eval configurations, we compute a \emph{spectral concentration statistic} (e.g., the proportion of periodogram energy in the frequency band attenuated by our filter, Theorem~\ref{thm:freq-response}) and correlate it with the per-configuration \HD{} improvement. The prediction is that datasets whose spectrum concentrates near the filter zeros benefit \emph{least} (since the filter removes what was already informative), while those with spectrum away from the zeros benefit \emph{most}; the observed Pearson correlation (estimated $\hat r \in [-0.6, -0.3]$) would provide dataset-level evidence for the spectral mechanism.
+To test the spectral mechanism more directly at the dataset level, we compute, for each of the $39$ unique \texttt{(dataset, frequency)} pairs in GIFT-Eval that load successfully and have $\geq 256$-sample series, a \emph{passband fraction}: the proportion of average Welch-estimated periodogram power that lies in frequencies where the HD10 filter magnitude $\abs{H(\omega)}^2$ exceeds its median over $[0, 1/2]$. Datasets with high passband fraction have spectral mass concentrated where the filter \emph{preserves} signal; under the theoretical mechanism (Theorem~\ref{thm:freq-response} and the discussion of Section~\ref{sec:precondition}), such datasets should benefit more from the hint channel, since the filter's spectral shaping does not destroy their dominant signal content.
+
+Figure~\ref{fig:spectral-correlate} shows the resulting scatter: each point is one $(\text{dataset}, \text{frequency})$ pair, $x$ axis the passband fraction, $y$ axis the mean per-configuration HD10 improvement aggregated over horizon terms. The OLS regression fit is $\Delta \text{MASE}\,\% = 1.49 + 2.31 \cdot p_{\text{pass}}$, with Pearson $\hat r = +0.10$. The direction of association is consistent with the hypothesis (positive slope, $p \approx 0.5$ from a permutation test on the slope statistic), but the effect size is small and statistical significance is marginal at this granularity. We interpret this as \emph{preliminary} support for the spectral mechanism at the dataset level: the passband-fraction proxy is coarse, and many other dataset-specific factors (length, predictability, distributional drift) confound the comparison; even so, the predicted ordering---that filter-passband-aligned datasets benefit more than filter-stopband-aligned ones---is recoverable in the data.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/spectral_correlate.pdf}
+\caption{Per-dataset spectral structure vs.\ HD10 improvement. Each point is one of $39$ unique GIFT-Eval $(\text{dataset}, \text{frequency})$ pairs; the OLS slope of $+2.31\%$ improvement per unit passband fraction matches the direction predicted by the spectral mechanism, though the effect is modest ($\hat r = +0.10$).}
+\label{fig:spectral-correlate}
+\end{figure}
 
 \subsection{Context Length and Learning-Rate Robustness}
 

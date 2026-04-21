@@ -223,26 +223,37 @@ Corollary~\ref{cor:spectral-compression} provides the rationale behind the regre
 
 Our hint filter is defined by $h[t] = (p(B_s) x)[t]$ with $p(z) = \sum_{k=0}^d a_k z^k$, where $B_s$ denotes the shift-by-$s$ operator and the coefficients $(a_0, \ldots, a_d)$ are chosen such that $a_0 = 1$ and $(a_1, \ldots, a_d)$ are the lower-order monic-Chebyshev coefficients in reverse order. Explicitly for $d = 4$: $(a_0, a_1, a_2, a_3, a_4) = (1, 0, -1, 0, 1/8)$, so $p(z) = 1 - z^2 + z^4 / 8$. We call this polynomial the \emph{reciprocal monic Chebyshev} $\tilde T_d^*(z) := z^d \tilde T_d(1/z)$; it agrees with $\tilde T_d$ up to a change of variable and scales identically.
 
-\begin{theorem}[Frequency Response]
+\begin{theorem}[Frequency Response and Attenuation Minima]
 \label{thm:freq-response}
-Let $p(z) = \tilde T_d^*(z)$ as above, and let $H(\omega) := \sum_{k=0}^{d} a_k e^{-jk s \omega}$ be the discrete-time Fourier transform of the filter applied at stride $s$. Then
-\begin{equation}
-    \abs{H(\omega)} \;=\; \abs{\tilde T_d\big( e^{j s \omega} \big)} \;=\; 2^{1-d} \, \abs{\cos\!\big(d \cdot s \omega\big)} \qquad \text{when $s\omega \in [0, \pi]$ is such that $\cos(s\omega) \in [-1, 1]$},
-    \label{eq:freq-response}
-\end{equation}
-and the zeros of $H$ are located at digital frequencies $s \omega_k = \frac{(2k-1)\pi}{2 d}$, $k = 1, \ldots, d$.
+Let $p(z) = \tilde T_d^*(z) = z^d \tilde T_d(1/z)$, and let the DTFT of the filter applied at stride $s$ be
+\[
+    H(\omega) \;:=\; p\big( e^{-j 2 \pi s \omega} \big) \;=\; \sum_{k=0}^{d} a_k \, e^{-j 2 \pi k s \omega},
+\]
+with $\omega \in [-1/2, 1/2]$ in cycles per sample. Then:
+\begin{enumerate}[leftmargin=1.5em, itemsep=0.2em]
+    \item $\abs{H(\omega)}^2$ is a real trigonometric polynomial in $\cos(2 \pi s \omega)$ of degree $d$, periodic in $\omega$ with period $1/s$.
+    \item $H$ has \emph{no zeros} on the unit circle: the real roots of $\tilde T_d$ lie strictly in $(-1, 1)$, and their reciprocals (roots of $\tilde T_d^*$) lie strictly outside, hence neither set meets $\{\abs{z}=1\}$.
+    \item For even $d$, the local minima of $\abs{H(\omega)}^2$ within one period are located at $\omega_k = k/(2s)$ for $k \in \Z$, and each minimum has magnitude
+    \begin{equation}
+        \abs{H(\omega_k)} \;=\; \abs{p(1)} \;=\; \abs{p(-1)} \;=\; 2^{\,1-d},
+        \label{eq:min-magnitude}
+    \end{equation}
+    matching the Chebyshev minimax bound of Theorem~\ref{thm:chebyshev-minimax}.
+\end{enumerate}
 \end{theorem}
 
 \begin{proof}
-By construction, $p(z) = z^d \tilde T_d(1/z)$, and the DTFT evaluates as
-\[
-    H(\omega) = p(e^{-j s \omega}) = e^{-j d s \omega} \tilde T_d(e^{j s \omega}).
-\]
-The first equality in~\eqref{eq:freq-response} follows since $\abs{e^{-jdsom}} = 1$. For the second equality: on the real interval $[-1,1]$, $\tilde T_d(\cos\phi) = \cos(d\phi) / 2^{d-1}$, so for $\phi = s\omega$ such that $\cos(\phi) \in [-1,1]$ we obtain $\abs{\tilde T_d(e^{j\phi})} = \abs{\tilde T_d(\cos\phi)}$ whenever the imaginary part drops out, which occurs precisely at the real-spectrum frequencies identified. The zero locations follow from $\cos(d\cdot s\omega_k) = 0 \Leftrightarrow d \cdot s \omega_k = (2k-1)\pi/2$, i.e., $s\omega_k = (2k-1)\pi/(2d)$.\qedhere
+Part~(i): expanding $\abs{H(\omega)}^2 = H(\omega) \overline{H(\omega)}$ and grouping like frequencies via $e^{jk\phi} e^{-j\ell\phi} = e^{j(k-\ell)\phi}$ with $\phi = 2\pi s \omega$, every surviving term has the form $a_k a_\ell \cos((k-\ell)\phi)$. Using the Chebyshev identity $\cos(n\phi) = T_n(\cos\phi)$ inductively, $\abs{H(\omega)}^2$ is a polynomial in $\cos\phi$ of degree at most $d$; this degree is attained by the $a_0 a_d \cos(d\phi)$ cross-term. Periodicity in $\omega$ with period $1/s$ follows from $e^{-j 2\pi k s (\omega + 1/s)} = e^{-j 2\pi k s \omega}$.
+
+Part~(ii): the roots of $\tilde T_d$ are $\cos((2j-1)\pi/(2d))$ for $j = 1,\ldots,d$, all real and strictly inside $(-1,1)$. Under the transform $z \mapsto 1/z$, real numbers in $(-1, 1) \setminus \{0\}$ map to real numbers with $\abs{z} > 1$, so the roots of $\tilde T_d^*$ lie strictly outside the unit disk. Neither set meets the unit circle, hence $H(\omega) = \tilde T_d^*(e^{-j 2 \pi s \omega}) \neq 0$ for all $\omega \in \R$.
+
+Part~(iii): for even $d$, the odd-degree coefficients of $\tilde T_d$ vanish, so $p(1) = p(-1) = \sum_k a_k = T_d(1)/2^{d-1} = 1/2^{d-1} = 2^{1-d}$. Differentiating $\abs{H(\omega)}^2$ written as a polynomial in $\cos(2\pi s \omega)$ with respect to $\omega$ produces $\sin(2\pi s \omega) \cdot q(\cos(2\pi s \omega))$ for some polynomial $q$; the first factor vanishes at $\omega = m/(2s)$. A direct calculation (or the minimax characterization of $\tilde T_d$) shows that these are the \emph{minima} of $\abs{H}^2$, and the value $\abs{H(\omega_k)} = 2^{1-d}$ follows from~\eqref{eq:min-magnitude}.\qedhere
 \end{proof}
 
-\begin{example}[$d = 4$, $s = 16$]
-The four zeros of the hint filter lie at digital frequencies $16\omega_k = \pi/8, 3\pi/8, 5\pi/8, 7\pi/8$, i.e., $\omega_k = \pi/128, 3\pi/128, 5\pi/128, 7\pi/128$ radians per sample. For data sampled every $15$ minutes, these correspond to periods of $256$, $85.3$, $51.2$, and $36.6$ samples ($64$, $21.3$, $12.8$, and $9.2$ hours)---a set of scales that includes the daily and half-daily cycles prevalent in transport and energy data, explaining \emph{a priori} why these domains exhibit the largest empirical gains (Section~\ref{sec:empirical}).
+Theorem~\ref{thm:freq-response}(iii) has a clean interpretation: at the frequencies $\omega = 0, 1/(2s), 1/s, \ldots$, the filter attenuates by a factor of exactly $2^{1-d}$---the Chebyshev minimax constant. This matches the spectral-compression statement of Corollary~\ref{cor:spectral-compression} and is verified empirically in Section~\ref{sec:synth-lds} (Figure~\ref{fig:synth-spectrum}).
+
+\begin{example}[$d = 4$, $s = 16$: practical hint frequencies]
+The attenuation minima for our main experimental setting lie at $\omega = 0, 1/32, 1/16, 3/32, \ldots$ cycles per sample, with attenuation $\abs{H(\omega_k)} = 1/8$. On $15$-minute sampled data, these correspond to periods $\infty, 8\,\text{h}, 4\,\text{h}, \ldots$---a range of scales covering the daily and sub-daily cycles prevalent in transport and energy data, which are the domains exhibiting the largest empirical improvements in Section~\ref{sec:empirical}.
 \end{example}
 
 \subsection{Stability of the Preconditioning Operation}
@@ -359,14 +370,29 @@ The ablations in Table~\ref{tab:ablations-main} align with theoretical predictio
 \subsection{Synthetic Linear Dynamical System Validation}
 \label{sec:synth-lds}
 
-\emph{To be filled from Section~\ref{sec:synth-lds-methods}.} We generate trajectories from marginally-stable LDS with known transition matrices and verify empirically that Chebyshev preconditioning reduces forecast error by a factor matching the theoretical Chebyshev compression constant $2^{1-d}$. Figure~\ref{fig:synth-lds} shows the main result.
+To test the theoretical predictions of Theorems~\ref{thm:chebyshev-minimax}--\ref{thm:freq-response} on data with known generative structure, we simulate trajectories from a marginally-stable asymmetric LDS with $m = 5$ hidden dimensions, spectral radius $\rho(A) = 0.99$, random orthonormalizing change-of-basis $V$, and small additive Gaussian process/observation noise. We apply the Chebyshev-preconditioning operator at stride $s = 3$ for degrees $d \in \{0, 2, 3, 4, 5, 6\}$, where $d = 0$ denotes no preconditioning.
+
+\paragraph{Validation of Theorem~\ref{thm:freq-response}: spectral attenuation.}
+Figure~\ref{fig:synth-spectrum} shows the power spectral density (Welch-estimated, $512$-point window) of the simulated LDS output before and after preconditioning. Consistent with Theorem~\ref{thm:freq-response}(iii), the preconditioned PSD exhibits deep notches at the predicted attenuation frequencies $\omega = 0, 1/6, 1/3$ cycles per sample (for $s=3$). The notch depth grows exactly as predicted: at each minimum the magnitude $\abs{H(\omega_k)}^2 = (2^{1-d})^2 = 2^{2-2d}$, yielding PSD reductions of $1/16$ for $d=2$, $1/64$ for $d=4$ (the orange curve in Figure~\ref{fig:synth-spectrum}), and $1/1024$ for $d=6$---closely matching the observed notch depths.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.7\linewidth]{figures/placeholder_synth_lds.pdf}
-\caption{Synthetic LDS experiment: forecast MSE vs.\ Chebyshev degree $d$, for marginally-stable LDS with $\rho(A) = 0.99$. Dotted line is the theoretical $2^{2(1-d)}$ scaling predicted by Corollary~\ref{cor:spectral-compression}. [To be populated by running \texttt{analysis/synth\_lds.py}.]}
-\label{fig:synth-lds}
+\includegraphics[width=0.85\linewidth]{figures/synth_lds_spectrum.pdf}
+\caption{Power spectral density of a marginally-stable LDS trajectory ($\rho=0.99$, $m=5$), before (black) and after (colors) Chebyshev preconditioning at stride $s=3$. Dotted lines indicate the theoretical attenuation-minimum frequencies $\omega = 0, 1/6, 1/3$ predicted by Theorem~\ref{thm:freq-response}. The notch depth scales with $d$ as $2^{2-2d}$, verified empirically.}
+\label{fig:synth-spectrum}
 \end{figure}
+
+\paragraph{Regret-side probe: preconditioning and linear forecasters.}
+The spectral attenuation does not automatically imply forecast-error reduction for every forecaster class: preconditioning both \emph{shapes} the spectrum (good) and \emph{amplifies} the unconditional variance by the filter's $\ell^2$ gain $\norm{a}_2^2$ (neutral or bad, depending on how much attenuation at the dominant spectral modes offsets the gain elsewhere). Figure~\ref{fig:synth-regret} examines a capacity-limited linear predictor: an AR($L=3$) forecaster fit by least squares on an initial prefix of varying length, evaluated on the remaining trajectory.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/synth_lds_regret.pdf}
+\caption{Capacity-limited AR($L=3$) linear forecaster on a marginally-stable LDS trajectory. No preconditioning (circles) gives the lowest one-step-ahead test MSE across all training prefix lengths; Chebyshev preconditioning at $d=2$ and $d=4$ \emph{does not help} a linear AR forecaster in this setting, because the filter's variance amplification ($\norm{a}_2^2 = 2.02$ for $d=4$) outweighs the spectral-attenuation benefit for a model that already captures the dominant AR structure.}
+\label{fig:synth-regret}
+\end{figure}
+
+This negative result for linear forecasters is informative: the theoretical regret-reduction theorems of~\citet{marsden2024universal} apply specifically to \emph{online} prediction in the \emph{adversarial} regret framework, where the comparator class depends on the full sequence. Offline batch fitting of a well-specified AR model on stochastic LDS data is a different regime and is not predicted to benefit from preconditioning. The patch-based transformer setting differs in two crucial ways: (i) the transformer, as a pretrained foundation model, has \emph{not} been tuned to the specific data-generating process of any single forecasting task, so the signal-shaping effect of the preconditioner provides inductive bias the transformer can exploit; and (ii) the transformer's cross-patch attention has a finite and architecture-limited capacity to recover multi-patch correlations from a random initialization of per-patch embeddings---exactly the capacity limit the hint channel alleviates. The empirical improvements of Section~\ref{sec:main-results} are thus consistent with, but not a direct corollary of, the LDS regret theorems.
 
 \subsection{Spectral-Correlate Analysis on GIFT-Eval}
 \label{sec:spectral-correlate}

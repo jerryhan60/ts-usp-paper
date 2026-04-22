@@ -100,20 +100,33 @@ Duplicate & 0.865 & $+$0.4\% & 217/485 & 0.99 \\
 \vskip -0.1in
 \end{table}
 
-Table~\ref{tab:main} shows that HD10 improves MASE by 2.9\% over the baseline ($p < 10^{-15}$). The capacity controls confirm the polynomial content drives the improvement: a \emph{duplicate} channel hurts (44.7\% wins), while a \emph{zero} channel is neutral (54.0\%). HD10 vs.\ Duplicate: 336/485 wins ($p = 6 \times 10^{-18}$). HD10 wins on every seed individually (range: $+0.4\%$ to $+5.0\%$; Appendix~\ref{app:seeds}). We confirm on the independent FEV-Bench (100 tasks): HD10 wins 72/100 ($+2.5\%$ MASE; Appendix~\ref{app:fevbench}). Under the official Moirai~2.0 protocol (10K warmup, 100K steps), HD10 still improves by 2.3\%, confirming the benefit is robust to training protocol (Appendix~\ref{app:official_protocol}).
+Table~\ref{tab:main} shows that HD10 improves MASE by 2.9\% over the baseline ($p < 10^{-15}$). HD10 wins on every seed individually (range: $+0.4\%$ to $+5.0\%$; Appendix~\ref{app:seeds}). We confirm on the independent FEV-Bench (100 tasks): HD10 wins 72/100 ($+2.5\%$ MASE; Appendix~\ref{app:fevbench}). Under the official Moirai~2.0 protocol (10K warmup, 100K steps), HD10 still improves by 2.3\%, confirming the benefit is robust to training protocol (Appendix~\ref{app:official_protocol}).
+
+\subsection{Capacity Controls}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/capacity_control.pdf}
+\vskip -0.1in
+\caption{Capacity controls. (a) 5-seed normalized geomean MASE on GIFT-Eval; error bars: cross-seed std. Baseline, Zero, and Duplicate share the HD10 architecture and parameter count, differing only in the auxiliary-channel content. (b) Paired win rates across 485 (seed $\times$ config) comparisons. \emph{Duplicate hurts}; \emph{Zero is at best marginal}; HD10 wins $\geq 66\%$ of comparisons against every control.}
+\label{fig:capacity}
+\vskip -0.1in
+\end{figure}
+
+Figure~\ref{fig:capacity} isolates the causal role of polynomial content. Zero (auxiliary channel set to zeros) and Duplicate (auxiliary channel = copy of the input) share HD10's architecture and $12$K parameter overhead, so any improvement from these conditions would be attributable to widened input capacity rather than to the Chebyshev filter. Empirically, Duplicate \emph{degrades} performance (217/485 wins, below the 50\% chance line) and Zero is at best marginally helpful (262/485, $p = 0.04$ unadjusted); meanwhile HD10 vs.\ Duplicate reaches $336/485$ wins ($p = 6 \times 10^{-18}$) and HD10 vs.\ Zero reaches $323/485$ ($p = 1.1 \times 10^{-13}$). The improvement is driven by the \emph{polynomial content} of the hint, not by the extra parameters.
 
 \subsection{Ablations}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig2_ablations.pdf}
+\includegraphics[width=0.95\columnwidth]{figures/degree_sweep_line.pdf}
 \vskip -0.1in
-\caption{Ablations (seed 0, 97 configs). Bar labels: wins/97 vs.\ baseline. Dashed line: baseline. Orange: optimal. (a) Degree $d{=}4$ optimal. (b) Stride $s{=}16{=}P$ optimal. (c) Chebyshev basis best. (d) 10\% hint dropout optimal.}
-\label{fig:ablations}
+\caption{Chebyshev polynomial degree sweep (seed 0, 10K steps, stride $s{=}16$, $10\%$ hint dropout). Even degrees (circles) consistently outperform odd degrees (squares)---consistent with the even-symmetry structure of the Chebyshev filter coefficients. Degree $d = 4$ is optimal across the sweep and is the setting of HD10 in all other experiments. Full ablations over stride, basis (Chebyshev vs.\ EMA/Legendre/finite-differences), and hint dropout are in Appendix~\ref{app:ablations}.}
+\label{fig:degree-sweep}
 \vskip -0.1in
 \end{figure}
 
-Figure~\ref{fig:ablations} summarizes ablations (full tables in Appendix~\ref{app:ablations}): degree $d{=}4$ is optimal; stride $s{=}P$ is optimal (filter taps align with patch boundaries); Chebyshev basis outperforms EMA, Legendre, and finite differences; 10\% hint dropout shows an inverted-U optimum. An inference-time ablation (Appendix~\ref{app:inference}) confirms the model learns specific polynomial structure: replacing hints with zeros degrades MASE by 9.3\%; random noise by 14.5\%; duplicate input by 29.9\%.
+Figure~\ref{fig:degree-sweep} sweeps the Chebyshev polynomial degree $d \in \{2,3,4,5,6,7,8\}$. Two qualitative features are visible: (i) every $d \geq 2$ beats the baseline, so the improvement is robust to the specific degree choice; (ii) even-degree filters outperform odd-degree filters, which is predicted by the monic-Chebyshev coefficient structure---for even $d$, the odd-power coefficients vanish and filter taps line up at even multiples of the patch stride, matching the natural scale of cross-patch correlations. Appendix~\ref{app:ablations} reports complementary ablations (stride $s \in \{4,8,16,32\}$ with $s = P = 16$ optimal; Chebyshev basis outperforms EMA/Legendre/finite-differences; hint dropout inverted-U with $10\%$ optimum) and inference-time content ablations confirming the model exploits the specific polynomial structure rather than generic extra capacity.
 
 \subsection{Extended Training and Analysis}
 

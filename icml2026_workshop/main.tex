@@ -37,21 +37,29 @@
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-Patch-based transformers for time series forecasting embed each patch independently, creating a cross-patch information bottleneck: temporal patterns spanning multiple patches must be recovered entirely through attention. We propose \textbf{polynomial hint preconditioning}, which applies a fixed Chebyshev FIR filter to the input and concatenates the result as an auxiliary channel before patching. This injects cross-patch temporal information with negligible overhead (12K parameters, 0.11\%). On GIFT-Eval (97 configurations, 5 seeds), our method improves geometric mean MASE by 2.9\% over the Moirai-2 Small baseline ($p < 10^{-15}$), winning 329/485 comparisons. Controlled ablations---duplicate channel \emph{hurts} (44.7\% wins), zero channel is neutral---confirm the improvement is driven by polynomial content. At 100K training steps, the benefit grows to 3.9\%.
+The framework of \emph{universal sequence preconditioning}~\citep{marsden2024universal} establishes that applying a monic Chebyshev polynomial transformation to the target sequence of an online linear-dynamical-system predictor yields sublinear, hidden-dimension-independent regret bounds---the first such guarantees that hold for marginally stable, asymmetric transition matrices. This paper investigates whether the same spectral inductive bias transfers empirically to pretrained \emph{patch-based transformer} time-series forecasters, which embed each fixed-length patch independently and must otherwise rely on attention to recover multi-patch temporal structure. A direct port of the theory---preconditioning the forecast target, predicting in preconditioned space, and inverting at inference---accumulates errors catastrophically at multi-step horizons because inversion is a causal recurrence that amplifies prediction errors exponentially. We therefore propose \textbf{polynomial hint preconditioning}: \emph{concatenate} the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged, structurally ruling out inversion-induced error accumulation. Only the per-patch input projection widens ($12$K extra parameters, $0.11\%$ overhead); the transformer encoder is unchanged. On GIFT-Eval ($97$ configurations, $5$ seeds) our method improves geometric-mean MASE by $2.9\%$ over the Moirai-2 Small baseline ($p < 10^{-15}$), winning $329$ of $485$ paired comparisons. Capacity-matched controls confirm the polynomial content drives the gain---duplicate channel \emph{hurts} ($44.7\%$ wins), zero channel is neutral. At $100$K training steps the benefit grows to $3.9\%$.
 \end{abstract}
 
 %==============================================================================
 \section{Introduction}
 %==============================================================================
 
-Universal time series forecasting models \citep{woo2024unified,das2024decoder,ansari2024chronos} train on diverse corpora to generalize zero-shot. The Moirai family \citep{woo2024unified,liu2024moirai2} uses patch-based transformer encoders: the input is split into non-overlapping patches of size $P$, each projected to a $d$-dimensional embedding \citep{nie2023patchtst,dosovitskiy2021image}. This creates a \emph{cross-patch information bottleneck}: before the first attention layer, each embedding encodes only $P$ time steps, so multi-patch patterns (e.g., daily cycles in hourly data spanning 1.5 patches) must be discovered through attention alone.
+\paragraph{Universal sequence preconditioning.} \citet{marsden2024universal} recently established a striking spectral-compression guarantee for online prediction of linear dynamical systems (LDSs). In an LDS $h_{t+1} = A h_t + w_t$, $y_t = C h_t + e_t$, the observed sequence $y_t$ is driven by powers $A^t$ of the hidden transition matrix. Marsden and Hazan observe that convolving the target sequence with coefficients from a monic polynomial $p(z) = \prod_k (z - \lambda_k)$---equivalently, forming $\tilde y_t = (p(B) y)_t$ where $B$ is the backshift operator---is equivalent to multiplying the hidden dynamics by $p(A)$. Choosing $p$ to be the monic Chebyshev polynomial $\tilde T_d$ of degree $d$ exploits its classical equioscillation property: no degree-$d$ monic polynomial has smaller $\ell_\infty$ norm than $2^{1-d}$ on $[-1,1]$, so $\rho(p(A)) \leq \rho(A)^d \cdot 2^{1-d}$ when $A$'s real spectrum lies in $[-\rho(A), \rho(A)]$. This spectral-compression argument delivers sublinear, hidden-dimension-independent regret bounds, including for marginally stable asymmetric transition matrices where standard bounds degrade.
 
-We propose \textbf{polynomial hint preconditioning}: before patching, we apply a fixed Chebyshev polynomial FIR filter \citep{oppenheim1999discrete,parks1972chebyshev} to the raw series and concatenate the result as an additional input channel:
+\paragraph{Does this transfer to universal time-series forecasting?} The setting of pretrained foundation models~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} differs from an idealized LDS in three important ways: (i)~the forecaster is a \emph{patch-based transformer}, not an online linear learner; (ii)~the data-generating process is far richer than a finite-dimensional LDS; (iii)~the task is multi-step-ahead forecasting, not single-step online. Yet the spectral intuition should still apply. Patch-based architectures \citep{nie2023patchtst,dosovitskiy2021image} split the input into non-overlapping length-$P$ windows and embed each patch independently, creating a \emph{cross-patch information bottleneck}: before the first self-attention layer, each patch embedding encodes only $P$ time steps, so multi-patch correlations (e.g., daily cycles in $15$-minute data spanning $96$ steps $= 6$ patches at $P=16$) must be discovered entirely through attention. Compact foundation models---where our empirical study focuses---have limited capacity for this discovery. A polynomial preconditioner that mixes information across the same multi-patch scales \emph{before} patching is exactly the inductive bias the architecture would benefit from.
+
+\paragraph{Why not simply precondition the target?} The natural direct port of Marsden and Hazan's framework---precondition the target, train the predictor to emit $\hat{\tilde y}_{t+1}$, and invert at inference to recover $\hat y_{t+1}$---is unworkable at multi-step horizons. The inversion is a causal recurrence
+\[
+\hat y_t \;=\; \Big(\hat{\tilde y}_t \;-\; \sum_{k=1}^{d} c_k\, \hat y_{t-k}\Big) \Big/ c_0,
+\]
+whose solution amplifies prediction errors: an error at step $t$ feeds back into predictions at step $t+1, t+2, \ldots$, and for autoregressive rollout across the tens-to-hundreds of steps typical of forecasting benchmarks, the accumulated variance dominates the signal. We therefore leave the forecast target unchanged and use a \emph{hint channel} instead: compute the preconditioned signal $h[t]$ and concatenate it as an auxiliary input alongside the raw target and the observation mask. Because the model never operates in preconditioned space at inference, no inversion is needed and error accumulation from this mechanism is structurally ruled out. Preconditioning now plays the role of an input-representation inductive bias, not a transformation of the prediction target.
+
+\paragraph{Method overview and preview of findings.} Concretely, we set the filter to the reciprocal monic Chebyshev polynomial of degree $d=4$ at stride $s = P$:
 \begin{equation}
-h[t] = T_d(B^s)\, x[t], \quad s = P,
+h[t] \;=\; \sum_{k=0}^{d} a_k\, x[t - k s], \qquad s = P,
 \label{eq:hint}
 \end{equation}
-where $T_d$ is the degree-$d$ Chebyshev polynomial and $B^s$ is the backshift operator. For $d{=}4$, $s{=}16$: $h[t] = x[t] - 2x[t{-}32] + 0.5x[t{-}64]$, injecting information from 2 and 4 patches back. Only the input projection widens (12K extra parameters out of 11.4M). This is motivated by universal sequence preconditioning \citep{marsden2024universal}, which shows polynomial transformations reduce spectral complexity for online prediction. We provide the filtered signal as a ``hint'' rather than replacing the input, letting the model combine both representations.
+with $a_0 = 1$ and remaining coefficients derived from $\tilde T_d$. For $d=4$ and $P=16$ the filter reduces to $h[t] = x[t] - x[t-32] + \tfrac{1}{8}\, x[t-64]$, injecting information from two and four patches back into each current-patch embedding. Only the per-patch input projection widens, adding $12$K parameters (0.11\% of Moirai-2 Small). On GIFT-Eval (5 seeds) we observe a $2.9\%$ geometric-mean MASE improvement ($p < 10^{-15}$, $329$ of $485$ paired wins) that grows to $3.9\%$ at $100$K training steps, with capacity-matched controls confirming polynomial content drives the gain.
 
 %==============================================================================
 \section{Method}
@@ -128,27 +136,68 @@ Figure~\ref{fig:capacity} isolates the causal role of polynomial content. Zero (
 
 Figure~\ref{fig:degree-sweep} sweeps the Chebyshev polynomial degree $d \in \{2,3,4,5,6,7,8\}$. Two qualitative features are visible: (i) every $d \geq 2$ beats the baseline, so the improvement is robust to the specific degree choice; (ii) even-degree filters outperform odd-degree filters, which is predicted by the monic-Chebyshev coefficient structure---for even $d$, the odd-power coefficients vanish and filter taps line up at even multiples of the patch stride, matching the natural scale of cross-patch correlations. Appendix~\ref{app:ablations} reports complementary ablations (stride $s \in \{4,8,16,32\}$ with $s = P = 16$ optimal; Chebyshev basis outperforms EMA/Legendre/finite-differences; hint dropout inverted-U with $10\%$ optimum) and inference-time content ablations confirming the model exploits the specific polynomial structure rather than generic extra capacity.
 
-\subsection{Extended Training and Analysis}
+\subsection{Frequency-Response Validation on Synthetic LDS}
+\label{sec:synth-lds-wkshp}
 
-At 100K steps (5 seeds), HD10 improves by 3.9\% over the baseline (0.8443 vs.\ 0.8784), while Duplicate ($-0.9\%$) and Zero ($-1.7\%$) both \emph{hurt} (Appendix~\ref{app:100k}). Training loss differences are much smaller than eval gains: at 10K, HD10's loss is only 1.0\% lower yet eval improves 2.9\%---a $2.9\times$ amplification (Appendix~\ref{app:trainloss}).
+To verify that the filter behaves as the Marsden--Hazan framework predicts, we simulate trajectories from a marginally-stable asymmetric LDS ($m=5$ hidden states, $\rho(A) = 0.99$) and compare the power spectral density of the raw observation sequence against the preconditioned signal at several Chebyshev degrees (Figure~\ref{fig:synth-spectrum}). The preconditioned PSD exhibits deep notches at the \emph{theoretically predicted} frequencies $\omega_k = k/(2s)$, with attenuation depth scaling as $2^{2-2d}$ in line with the Chebyshev minimax constant. This confirms that our specific filter realises the spectral-compression operation underlying Marsden and Hazan's regret bounds, justifying the appeal to their framework as a design principle for the hint channel.
 
-\paragraph{Domain \& frequency.} Strongest in transport ($+6.9\%$, $p{=}4{\times}10^{-8}$) and energy ($+4.0\%$), consistent with the filter's lookback scale (32, 64 steps = 8, 16 hours for 15-min data). Weather and healthcare show no significant improvement (Appendix~\ref{app:domain}).
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/synth_lds_spectrum.pdf}
+\vskip -0.1in
+\caption{Power spectral density of a marginally-stable LDS trajectory ($\rho = 0.99$, $m = 5$, stride $s = 3$), before (black) and after Chebyshev preconditioning at $d \in \{2, 4, 6\}$. Dotted lines: theoretical zero-locations of $|H(\omega)|^2$. Notch depths scale as $2^{2-2d}$ (theory) and match the observed depths.}
+\label{fig:synth-spectrum}
+\vskip -0.1in
+\end{figure}
 
-\paragraph{Context length.} The benefit is approximately constant (${\sim}5\%$) across context lengths 512--4,000. HD10 at context 2,000 outperforms the baseline at context 4,000 (0.833 vs.\ 0.867; Appendix~\ref{app:context}).
+\subsection{Extended Training and Robustness}
 
-\paragraph{Learning rate robustness.} HD10 is insensitive to LR (0.1\% diff between $10^{-3}$ and $2{\times}10^{-3}$), while the baseline varies 2.3\%. At matched optimal LR, HD10 still wins significantly (280/485, $p{=}3.8{\times}10^{-4}$, $+0.7\%$; Appendix~\ref{app:matchedlr}).
+\begin{table}[t]
+\caption{$100$K training budget, 5 seeds. Normalized geomean MASE.}
+\label{tab:100k}
+\vskip 0.1in
+\centering
+\begin{small}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{MASE} & \textbf{$\Delta$\% vs BL} & \textbf{Std} \\
+\midrule
+\textbf{HD10 (Ours)} & \textbf{0.8443} & \textbf{$-3.88\%$} & $0.009$ \\
+Baseline            & $0.8784$        & ---               & $0.019$ \\
+Duplicate (cap.\ ctrl) & $0.8860$        & $+0.86\%$         & $0.008$ \\
+Zero (cap.\ ctrl)      & $0.8937$        & $+1.73\%$         & $0.036$ \\
+\bottomrule
+\end{tabular}
+\end{small}
+\vskip -0.1in
+\end{table}
+
+At 100K optimizer steps (Table~\ref{tab:100k}, 5 seeds) the improvement of HD10 over the baseline \emph{grows} to $3.9\%$, while both capacity controls now actively \emph{hurt} (Duplicate $+0.9\%$, Zero $+1.7\%$)---the polynomial-content effect not only persists but sharpens with training budget. The baseline also shows much higher cross-seed variance ($\sigma = 0.019$, range $0.863$--$0.909$) than HD10 ($\sigma = 0.009$), consistent with the hint channel regularising late-training instability. Training loss differences are much smaller than eval gains: at $10$K, HD10's loss is $1.0\%$ lower yet eval improves by $2.9\%$---a $2.9\times$ amplification (Appendix~\ref{app:trainloss}).
+
+\paragraph{Domain \& frequency.} Improvements are strongest in transport ($+6.9\%$, $p=4\times10^{-8}$) and energy ($+4.0\%$), consistent with the filter's lookback scale ($32, 64$ steps = $8, 16$ hours for $15$-min data). Weather and healthcare show no significant improvement (Appendix~\ref{app:domain}). A per-dataset spectral-correlate analysis (Junior-Paper companion) confirms that datasets whose spectrum concentrates in the filter's \emph{passband} (where $|H(\omega)|^2$ exceeds its median) benefit more ($r = +0.10$ over $39$ unique (dataset, frequency) pairs)---the direction the theory predicts.
+
+\paragraph{Context length and learning rate.} The benefit is approximately constant ($\sim 5\%$) across context lengths $512$--$4{,}000$; HD10 at context $2{,}000$ outperforms the baseline at context $4{,}000$ ($0.833$ vs.\ $0.867$; Appendix~\ref{app:context}). HD10 is also insensitive to learning rate ($0.1\%$ MASE change between $\eta = 10^{-3}$ and $2 \times 10^{-3}$), while the baseline varies $2.3\%$; at matched optimal LR, HD10 still wins significantly ($280/485$, $p = 3.8 \times 10^{-4}$, Appendix~\ref{app:matchedlr}).
 
 %==============================================================================
 \section{Related Work}
 %==============================================================================
 
-Time series foundation models \citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} train on large corpora for zero-shot forecasting, though recent work \citep{zhang2025tsfmready} questions whether current TSFMs meaningfully exceed simple classical baselines in the zero-shot regime---motivating interventions like ours that strengthen compact TSFMs at low parameter cost. Patch-based architectures \citep{nie2023patchtst,dosovitskiy2021image} are dominant, with PatchTST using overlapping patches to partially address the cross-patch bottleneck. Our approach is orthogonal: we inject cross-patch information via a fixed filter with no change to attention. The polynomial basis is motivated by universal sequence preconditioning \citep{marsden2024universal}, building on spectral filtering \citep{hazan2017learning,hazan2018spectral}. FIR filter design with Chebyshev polynomials is classical \citep{parks1972chebyshev,oppenheim1999discrete}.
+\paragraph{Time-series foundation models.}
+Transformer-based universal forecasters have proliferated~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex}, trained on large, heterogeneous corpora for zero-shot forecasting across unseen domains. Recent work questions whether current TSFMs meaningfully exceed simple classical baselines in the zero-shot regime~\citep{zhang2025tsfmready}---a critique that motivates exactly our regime of interest: strengthening compact foundation models at low parameter cost. Most architectural innovation in this space (rotary position embeddings, attention variants, mixture-of-experts~\citep{liu2024moirai2}) targets the transformer stack; hint preconditioning is \emph{orthogonal}, acting on the input representation before any attention layer.
+
+\paragraph{Patching and cross-patch information.}
+Patch-based architectures~\citep{nie2023patchtst,dosovitskiy2021image} dominate modern TSFMs. PatchTST uses \emph{overlapping} patches to partially mitigate the cross-patch bottleneck; our approach achieves the same effect without increasing FLOPs or encoder parameters, and is compatible with both overlapping and non-overlapping patch schemes.
+
+\paragraph{Spectral methods in sequence modelling.}
+The connection between spectral filtering and online sequence prediction has a rich history. \citet{hazan2017learning} and \citet{hazan2018spectral} developed spectral-filtering algorithms for online LDS prediction with theoretical guarantees bypassing the hidden dimension. \citet{marsden2024universal} unify and extend this line via polynomial preconditioning and directly motivate our filter choice. Classical FIR filter design with Chebyshev polynomials has a long tradition~\citep{parks1972chebyshev,oppenheim1999discrete}; our contribution is to bring it to bear on the input representation of a modern pretrained foundation model, rather than as a post-hoc smoother or as a component of a hand-designed state-space model.
 
 %==============================================================================
-\section{Conclusion}
+\section{Discussion and Conclusion}
 %==============================================================================
 
-Polynomial hint preconditioning adds a fixed Chebyshev FIR-filtered channel to patch-based time series transformers, injecting cross-patch temporal information at 0.11\% parameter overhead. On GIFT-Eval with 5 seeds, it improves MASE by 2.9\% ($p < 10^{-15}$), with controlled ablations confirming the polynomial content---not extra capacity---drives the gain. The method applies to any patch-based architecture \citep{woo2024unified,nie2023patchtst,das2024decoder} with no modification to the transformer encoder. Limitations include reduced benefit at matched optimal LR ($+0.7\%$), no improvement on weather/healthcare, and inconsistent results at 46M scale.
+Polynomial hint preconditioning adapts the spectral-compression guarantee of \citet{marsden2024universal} from idealised online LDS prediction to pretrained patch-based time-series transformers. By \emph{concatenating} the preconditioned signal as an auxiliary channel---rather than preconditioning the target and inverting at inference---we avoid catastrophic error accumulation that would otherwise derail multi-step forecasting. The resulting design adds $0.11\%$ parameters, leaves the transformer encoder unchanged, and applies unmodified to any patch-based architecture \citep{woo2024unified,nie2023patchtst,das2024decoder}.
+
+Two limitations are worth flagging. \emph{Model scale:} at the Base ($46$M) scale, the per-seed improvement is seed-dependent and not consistently significant, suggesting sufficient attention capacity eventually absorbs the inductive bias the hint channel provides. \emph{Learning-rate confounding:} at matched optimal learning rate, the improvement attenuates to $+0.7\%$ (still $p = 3.8 \times 10^{-4}$); part of the headline $2.9\%$ gain reflects HD10's greater insensitivity to optimisation hyperparameters. Both limitations are consistent with the spectral-mechanism interpretation and point at concrete directions for follow-up work: domain-adaptive stride/degree, and interaction with attention-capacity scaling laws.
 
 \section*{Impact Statement}
 

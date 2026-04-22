@@ -34,7 +34,7 @@
   \vskip 0.3in
 ]
 
-% \printAffiliationsAndNotice{} % Suppressed in anonymous submission — see note.
+\printAffiliationsAndNotice{}
 
 \begin{abstract}
 Patch-based transformers for time series forecasting embed each patch independently, creating a cross-patch information bottleneck: temporal patterns spanning multiple patches must be recovered entirely through attention. We propose \textbf{polynomial hint preconditioning}, which applies a fixed Chebyshev FIR filter to the input and concatenates the result as an auxiliary channel before patching. This injects cross-patch temporal information with negligible overhead (12K parameters, 0.11\%). On GIFT-Eval (97 configurations, 5 seeds), our method improves geometric mean MASE by 2.9\% over the Moirai-2 Small baseline ($p < 10^{-15}$), winning 329/485 comparisons. Controlled ablations---duplicate channel \emph{hurts} (44.7\% wins), zero channel is neutral---confirm the improvement is driven by polynomial content. At 100K training steps, the benefit grows to 3.9\%.

@@ -82,7 +82,7 @@ with $a_0 = 1$ and remaining coefficients derived from $\tilde T_d$. For $d=4$ a
 \section{Experiments}
 %==============================================================================
 
-\paragraph{Setup.} We train Moirai-2 Small \citep{liu2024moirai2} (11.4M params, 6-layer transformer, $P{=}16$) from scratch on the LOTSA corpus \citep{woo2024unified} for 10K steps (batch 256, AdamW, cosine LR $10^{-3}$, 1K warmup, bf16). Evaluation uses GIFT-Eval \citep{vijay2024gifteval} (97 dataset$\times$horizon configs) at context length 4,000. We report normalized MASE following the GIFT-Eval leaderboard convention: each configuration's MASE is divided by the seasonal naive baseline's MASE, then aggregated via geometric mean. We run 5 seeds (0, 1, 2, 7, 42) and use paired sign tests pooled across seeds (485 comparisons). See Appendix~\ref{app:methodology} for full details.
+\paragraph{Setup.} We train Moirai-2 Small \citep{liu2024moirai2} (11.4M params, 6-layer transformer, $P{=}16$) from scratch on the LOTSA corpus \citep{woo2024unified} for 10K steps (batch 256, AdamW, cosine LR $10^{-3}$, 1K warmup, bf16). Our Baseline is a \emph{best-effort from-scratch retrain} of Moirai-2 Small under this protocol---the official Moirai~2.0-R-Small release used Salesforce's full, undisclosed training compute, so our retrain does not (and cannot) reproduce its absolute leaderboard numbers. All four conditions in this paper (Baseline, HD10, Zero, Duplicate) share identical data, optimiser, seeds, and compute, so the effects we report are controlled \emph{relative} improvements; absolute leaderboard context is given in Appendix~\ref{app:leaderboard}. Evaluation uses GIFT-Eval \citep{vijay2024gifteval} (97 dataset$\times$horizon configs) at context length 4,000. We report normalized MASE following the GIFT-Eval leaderboard convention: each configuration's MASE is divided by the seasonal naive baseline's MASE, then aggregated via geometric mean. We run 5 seeds (0, 1, 2, 7, 42) and use paired sign tests pooled across seeds (485 comparisons). See Appendix~\ref{app:methodology} for full details.
 
 \paragraph{Conditions.} Baseline (standard Moirai-2), Zero (hint architecture with all-zero hints), Duplicate (hint = copy of input), and \textbf{HD10} (Chebyshev $d{=}4$, stride 16, 10\% dropout).
 
@@ -154,7 +154,7 @@ Figure~\ref{fig:capacity} isolates the causal role of polynomial content. Zero (
 \centering
 \includegraphics[width=0.95\columnwidth]{figures/degree_sweep_line.pdf}
 \vskip -0.1in
-\caption{Chebyshev polynomial degree sweep (seed 0, 10K steps, stride $s{=}16$, $10\%$ hint dropout). Even degrees (circles) consistently outperform odd degrees (squares)---consistent with the even-symmetry structure of the Chebyshev filter coefficients. Degree $d = 4$ is optimal across the sweep and is the setting of HD10 in all other experiments. Full ablations over stride, basis (Chebyshev vs.\ EMA/Legendre/finite-differences), and hint dropout are in Appendix~\ref{app:ablations}.}
+\caption{Chebyshev polynomial degree sweep (10K steps, stride $s{=}16$, $10\%$ hint dropout). Filled blue circles mark multi-seed means ($n\!\geq\!4$, error bars $\pm 1$ std); hollow orange squares mark single-seed (seed 0) points---multi-seed runs for $d \in \{3,5,7,8\}$ are in progress. Grey band: Baseline 5-seed mean $\pm 1$ std. Every $d \geq 2$ beats the baseline; $d=4$ is optimal. Full ablations over stride, basis, and hint dropout are in Appendix~\ref{app:ablations}.}
 \label{fig:degree-sweep}
 \vskip -0.1in
 \end{figure}

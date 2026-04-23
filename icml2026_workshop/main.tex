@@ -108,7 +108,32 @@ Duplicate & 0.865 & $+$0.4\% & 217/485 & 0.99 \\
 \vskip -0.1in
 \end{table}
 
-Table~\ref{tab:main} shows that HD10 improves MASE by 2.9\% over the baseline ($p < 10^{-15}$). HD10 wins on every seed individually (range: $+0.4\%$ to $+5.0\%$; Appendix~\ref{app:seeds}). We confirm on the independent FEV-Bench (100 tasks): HD10 wins 72/100 ($+2.5\%$ MASE; Appendix~\ref{app:fevbench}). Under the official Moirai~2.0 protocol (10K warmup, 100K steps), HD10 still improves by 2.3\%, confirming the benefit is robust to training protocol (Appendix~\ref{app:official_protocol}).
+Table~\ref{tab:main} shows that HD10 improves MASE by 2.9\% over the baseline ($p < 10^{-15}$). Table~\ref{tab:per-seed} breaks this down by seed: HD10 beats the baseline on \emph{every} seed, with per-seed improvements ranging from $+0.4\%$ (the weakest seed, 54 of 97 wins) to $+5.0\%$ (66 of 97 wins, $p = 2.5 \times 10^{-4}$), ruling out a dependence on any single initialisation.
+
+\begin{table}[t]
+\caption{Per-seed HD10 vs.\ Baseline at $10$K steps (normalized geomean MASE, $97$ configs each). HD10 wins on all five seeds.}
+\label{tab:per-seed}
+\vskip 0.1in
+\centering
+\begin{small}
+\begin{tabular}{cccccc}
+\toprule
+\textbf{Seed} & \textbf{BL} & \textbf{HD10} & \textbf{$\Delta$\%} & \textbf{Wins/97} & \textbf{$p$-value} \\
+\midrule
+0  & 0.8666 & 0.8234 & $-4.99\%$ & 66 & $2.5\!\times\!10^{-4}$ \\
+1  & 0.8503 & 0.8465 & $-0.44\%$ & 54 & $0.155$ \\
+2  & 0.8630 & 0.8391 & $-2.77\%$ & 70 & $7.4\!\times\!10^{-6}$ \\
+7  & 0.8676 & 0.8320 & $-4.11\%$ & 78 & $5.8\!\times\!10^{-10}$ \\
+42 & 0.8614 & 0.8430 & $-2.13\%$ & 61 & $7.2\!\times\!10^{-3}$ \\
+\midrule
+\textbf{Pool} & \textbf{0.8617} & \textbf{0.8368} & \textbf{$-2.89\%$} & \textbf{329/485} & $\mathbf{1.5\!\times\!10^{-15}}$ \\
+\bottomrule
+\end{tabular}
+\end{small}
+\vskip -0.1in
+\end{table}
+
+We also confirm the effect on the independent FEV-Bench~\citep{das2024decoder} (100 tasks; Appendix~\ref{app:fevbench}): HD10 improves geometric-mean MASE by $+2.5\%$ ($1.253$ vs.\ $1.284$) and the quantile SQL metric by $+1.3\%$ ($1.657$ vs.\ $1.679$), winning $72$ of $100$ tasks. Under the official Moirai~2.0 protocol ($10$K warmup, $100$K steps) HD10 still improves by $2.3\%$, confirming the benefit is robust to training schedule (Appendix~\ref{app:official_protocol}).
 
 \subsection{Capacity Controls}
 
@@ -136,20 +161,6 @@ Figure~\ref{fig:capacity} isolates the causal role of polynomial content. Zero (
 
 Figure~\ref{fig:degree-sweep} sweeps the Chebyshev polynomial degree $d \in \{2,3,4,5,6,7,8\}$. Two qualitative features are visible: (i) every $d \geq 2$ beats the baseline, so the improvement is robust to the specific degree choice; (ii) even-degree filters outperform odd-degree filters, which is predicted by the monic-Chebyshev coefficient structure---for even $d$, the odd-power coefficients vanish and filter taps line up at even multiples of the patch stride, matching the natural scale of cross-patch correlations. Appendix~\ref{app:ablations} reports complementary ablations (stride $s \in \{4,8,16,32\}$ with $s = P = 16$ optimal; Chebyshev basis outperforms EMA/Legendre/finite-differences; hint dropout inverted-U with $10\%$ optimum) and inference-time content ablations confirming the model exploits the specific polynomial structure rather than generic extra capacity.
 
-\subsection{Frequency-Response Validation on Synthetic LDS}
-\label{sec:synth-lds-wkshp}
-
-To verify that the filter behaves as the Marsden--Hazan framework predicts, we simulate trajectories from a marginally-stable asymmetric LDS ($m=5$ hidden states, $\rho(A) = 0.99$) and compare the power spectral density of the raw observation sequence against the preconditioned signal at several Chebyshev degrees (Figure~\ref{fig:synth-spectrum}). The preconditioned PSD exhibits deep notches at the \emph{theoretically predicted} frequencies $\omega_k = k/(2s)$, with attenuation depth scaling as $2^{2-2d}$ in line with the Chebyshev minimax constant. This confirms that our specific filter realises the spectral-compression operation underlying Marsden and Hazan's regret bounds, justifying the appeal to their framework as a design principle for the hint channel.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/synth_lds_spectrum.pdf}
-\vskip -0.1in
-\caption{Power spectral density of a marginally-stable LDS trajectory ($\rho = 0.99$, $m = 5$, stride $s = 3$), before (black) and after Chebyshev preconditioning at $d \in \{2, 4, 6\}$. Dotted lines: theoretical zero-locations of $|H(\omega)|^2$. Notch depths scale as $2^{2-2d}$ (theory) and match the observed depths.}
-\label{fig:synth-spectrum}
-\vskip -0.1in
-\end{figure}
-
 \subsection{Extended Training and Robustness}
 
 \begin{table}[t]
@@ -174,7 +185,30 @@ Zero (cap.\ ctrl)      & $0.8937$        & $+1.73\%$         & $0.036$ \\
 
 At 100K optimizer steps (Table~\ref{tab:100k}, 5 seeds) the improvement of HD10 over the baseline \emph{grows} to $3.9\%$, while both capacity controls now actively \emph{hurt} (Duplicate $+0.9\%$, Zero $+1.7\%$)---the polynomial-content effect not only persists but sharpens with training budget. The baseline also shows much higher cross-seed variance ($\sigma = 0.019$, range $0.863$--$0.909$) than HD10 ($\sigma = 0.009$), consistent with the hint channel regularising late-training instability. Training loss differences are much smaller than eval gains: at $10$K, HD10's loss is $1.0\%$ lower yet eval improves by $2.9\%$---a $2.9\times$ amplification (Appendix~\ref{app:trainloss}).
 
-\paragraph{Domain \& frequency.} Improvements are strongest in transport ($+6.9\%$, $p=4\times10^{-8}$) and energy ($+4.0\%$), consistent with the filter's lookback scale ($32, 64$ steps = $8, 16$ hours for $15$-min data). Weather and healthcare show no significant improvement (Appendix~\ref{app:domain}). A per-dataset spectral-correlate analysis (Junior-Paper companion) confirms that datasets whose spectrum concentrates in the filter's \emph{passband} (where $|H(\omega)|^2$ exceeds its median) benefit more ($r = +0.10$ over $39$ unique (dataset, frequency) pairs)---the direction the theory predicts.
+\paragraph{Domain \& frequency.} Improvements are strongest in high-temporal-resolution domains whose natural periodicities match the filter's $32/64$-step lookback (Table~\ref{tab:domain}). Weather and healthcare datasets, dominated by scales outside this range, show no significant improvement (Appendix~\ref{app:domain}). A per-dataset spectral-correlate analysis confirms that datasets whose spectrum concentrates in the filter's \emph{passband} (where $|H(\omega)|^2$ exceeds its median) benefit more ($r = +0.10$ over $39$ unique (dataset, frequency) pairs)---the direction the theory predicts.
+
+\begin{table}[t]
+\caption{Per-domain HD10 vs.\ Baseline (5 seeds pooled, 485 observations). Domains ordered by effect size.}
+\label{tab:domain}
+\vskip 0.08in
+\centering
+\begin{small}
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Domain} & \textbf{$n$} & \textbf{$\Delta$\%} & \textbf{$p$} \\
+\midrule
+Demographics       & $15$  & $+9.8\%$  & $0.004$               \\
+Transport          & $55$  & $+6.9\%$  & $4\!\times\!10^{-8}$  \\
+Energy             & $80$  & $+4.0\%$  & $2\!\times\!10^{-4}$  \\
+IT / Cloud         & $120$ & $+2.2\%$  & $8\!\times\!10^{-5}$  \\
+ETT (Industrial)   & $80$  & $+1.5\%$  & $0.001$               \\
+Weather            & $75$  & $+0.3\%$  & $0.68$ (ns)           \\
+Healthcare         & $10$  & $+0.2\%$  & $0.62$ (ns)           \\
+\bottomrule
+\end{tabular}
+\end{small}
+\vskip -0.1in
+\end{table}
 
 \paragraph{Context length and learning rate.} The benefit is approximately constant ($\sim 5\%$) across context lengths $512$--$4{,}000$; HD10 at context $2{,}000$ outperforms the baseline at context $4{,}000$ ($0.833$ vs.\ $0.867$; Appendix~\ref{app:context}). HD10 is also insensitive to learning rate ($0.1\%$ MASE change between $\eta = 10^{-3}$ and $2 \times 10^{-3}$), while the baseline varies $2.3\%$; at matched optimal LR, HD10 still wins significantly ($280/485$, $p = 3.8 \times 10^{-4}$, Appendix~\ref{app:matchedlr}).
 

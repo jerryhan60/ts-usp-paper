@@ -1112,11 +1112,11 @@ Baseline (1K warmup) & 0.909 & 0.863 & 0.864 & 0.878 & --- \\
 Baseline (10K warmup) & 0.882 & 0.880 & 0.917 & 0.893 & --- \\
 \midrule
 HD10 (1K warmup) & 0.835 & 0.859 & 0.845 & 0.844 & $-3.9\%$ \\
-HD10 (10K warmup) & 0.892 & 0.846 & 0.880 & \textbf{0.873} & $\mathbf{-2.3\%}$ \\
+HD10 (10K warmup) & 0.869 & 0.843 & 0.880 & \textbf{0.864} & $\mathbf{-3.2\%}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-With 10K warmup (matching the official protocol), HD10 still outperforms the baseline by $2.3\%$ on average across 3 seeds (compared to $3.9\%$ with 1K warmup). The smaller advantage reflects that the longer warmup partially stabilizes the baseline---at seed 0, BL improves from 0.909 (1K warmup, which shows the late-training collapse) to 0.882 (10K warmup). The benefit is seed-dependent: HD10 wins at seed 2 ($+3.8\%$) and seed 7 ($+4.0\%$), but slightly loses at seed 0 ($-1.1\%$). This suggests that part of HD10's 100K advantage at 1K warmup is robustness to schedule-induced instability, but a genuine $\sim$2\% inductive-bias effect persists under the matched-official protocol.
+With 10K warmup (matching the official protocol), HD10 outperforms the baseline by $3.2\%$ on average across 3 seeds (0.864 vs 0.893), winning on every seed: $+1.5\%$ (s0), $+4.2\%$ (s2), $+4.0\%$ (s7). This is comparable to (and slightly smaller than) the $3.9\%$ advantage at 1K warmup, confirming that the hint channel provides a genuine inductive bias effect that persists under the matched-official protocol rather than being an artifact of the shorter warmup's schedule-induced instability.
 
 \end{document}

@@ -338,34 +338,35 @@ Table~\ref{tab:main} shows that \HD{} improves geometric-mean MASE by $2.89\%$ o
 \begin{table}[h]
 \centering
 \small
-\caption{Filter ablations (seed 0, $97$ configs, $10$K steps). Best in \textbf{bold}.}
+\caption{Filter ablations on GIFT-Eval (97 configs, $10$K steps). Degree row uses 5 seeds (mean); other rows use seed 0. Best in \textbf{bold}.}
 \label{tab:ablations-main}
-\begin{tabular}{lcccc}
+\begin{tabular}{lccccccc}
 \toprule
-\multicolumn{5}{c}{\textbf{(a) Degree} (Chebyshev, $s=16$, dropout $10\%$)} \\
+\multicolumn{8}{c}{\textbf{(a) Degree} (Chebyshev, $s=16$, dropout $10\%$, $5$ seeds, mean MASE)} \\
 \midrule
-$d$ & $2$ & $3$ & $\mathbf{4}$ & $6$ \\
-MASE & $0.839$ & $0.850$ & $\mathbf{0.823}$ & $0.835$ \\
+$d$ & $2$ & $3$ & $\mathbf{4}$ & $5$ & $6$ & $7$ & $8$ \\
+MASE & $0.850$ & $0.842$ & $\mathbf{0.837}$ & $0.842$ & $0.840$ & $0.847$ & $0.841$ \\
+Std & $0.013$ & $0.005$ & $0.009$ & $0.008$ & $0.011$ & $0.011$ & $0.005$ \\
 \midrule
-\multicolumn{5}{c}{\textbf{(b) Stride} (Chebyshev $d{=}4$, dropout $10\%$)} \\
+\multicolumn{8}{c}{\textbf{(b) Stride} (Chebyshev $d{=}4$, dropout $10\%$, seed 0)} \\
 \midrule
-$s$ & $4$ & $8$ & $\mathbf{16}$ & $32$ \\
-MASE & $0.841$ & $0.852$ & $\mathbf{0.823}$ & $0.848$ \\
+$s$ & $4$ & $8$ & $\mathbf{16}$ & $32$ & & & \\
+MASE & $0.841$ & $0.852$ & $\mathbf{0.823}$ & $0.848$ & & & \\
 \midrule
-\multicolumn{5}{c}{\textbf{(c) Basis} ($d{=}4$, $s{=}16$, dropout $10\%$)} \\
+\multicolumn{8}{c}{\textbf{(c) Basis} ($d{=}4$, $s{=}16$, dropout $10\%$, seed 0)} \\
 \midrule
-Basis & \textbf{Cheby} & EMA & Legendre & FiniteDiff \\
-MASE & $\mathbf{0.823}$ & $0.833$ & $0.840$ & $0.857$ \\
+Basis & \textbf{Cheby} & EMA & Legendre & FiniteDiff & & & \\
+MASE & $\mathbf{0.823}$ & $0.833$ & $0.840$ & $0.857$ & & & \\
 \midrule
-\multicolumn{5}{c}{\textbf{(d) Hint Dropout} (Chebyshev $d{=}4$, $s{=}16$)} \\
+\multicolumn{8}{c}{\textbf{(d) Hint Dropout} (Chebyshev $d{=}4$, $s{=}16$, seed 0)} \\
 \midrule
-$p_{\text{drop}}$ & $0\%$ & $2\%$ & $\mathbf{10\%}$ & $20\%$ \\
-MASE & $0.838$ & $0.839$ & $\mathbf{0.823}$ & $0.842$ \\
+$p_{\text{drop}}$ & $0\%$ & $2\%$ & $\mathbf{10\%}$ & $20\%$ & & & \\
+MASE & $0.838$ & $0.839$ & $\mathbf{0.823}$ & $0.842$ & & & \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The ablations in Table~\ref{tab:ablations-main} align with theoretical predictions. (a) Degree $d = 4$ is optimal, consistent with the Chebyshev theorem: higher degrees offer more concentrated frequency selectivity but introduce longer-lag taps whose autocovariance-based information decays; lower degrees offer insufficient spectral sculpting. (b) Stride $s = P$ is optimal: filter taps align exactly with patch boundaries, so the hint injects cross-patch structure at the natural scale. (c) Chebyshev beats EMA (a one-sided low-pass filter), Legendre (orthogonal but not minimax), and finite-difference (degenerate high-pass), confirming the minimax-optimality argument. (d) Dropout $10\%$ avoids both over-reliance on hints (low dropout) and under-use (high dropout).
+The ablations in Table~\ref{tab:ablations-main} align with theoretical predictions. (a) Across $d \in \{2, \ldots, 8\}$ at 5 seeds each, $d = 4$ has the lowest mean MASE, but the curve is shallow: $d \in \{3, 5, 6, 8\}$ are within roughly one seed-to-seed standard deviation, and only $d = 2$ (a single non-trivial lag) and $d = 7$ trail meaningfully. We treat $d=4$ as a representative working choice rather than a uniquely optimal one---the qualitative ``every $d \geq 2$ improves over the baseline'' conclusion is the seed-robust statement, and is what theory predicts. (b) Stride $s = P$ is optimal: filter taps align exactly with patch boundaries, so the hint injects cross-patch structure at the natural scale. (c) Chebyshev beats EMA (a one-sided low-pass filter), Legendre (orthogonal but not minimax), and finite-difference (degenerate high-pass), confirming the minimax-optimality argument. (d) Dropout $10\%$ avoids both over-reliance on hints (low dropout) and under-use (high dropout).
 
 \subsection{Synthetic Linear Dynamical System Validation}
 \label{sec:synth-lds}

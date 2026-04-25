@@ -154,12 +154,12 @@ Figure~\ref{fig:capacity} isolates the causal role of polynomial content. Zero (
 \centering
 \includegraphics[width=0.95\columnwidth]{figures/degree_sweep_line.pdf}
 \vskip -0.1in
-\caption{Chebyshev polynomial degree sweep (10K steps, stride $s{=}16$, $10\%$ hint dropout). Filled blue circles mark multi-seed means ($n\!\geq\!4$, error bars $\pm 1$ std); hollow orange squares mark single-seed (seed 0) points---multi-seed runs for $d \in \{3,5,7,8\}$ are in progress. Grey band: Baseline 5-seed mean $\pm 1$ std. Every $d \geq 2$ beats the baseline; $d=4$ is optimal. Full ablations over stride, basis, and hint dropout are in Appendix~\ref{app:ablations}.}
+\caption{Chebyshev polynomial degree sweep (10K steps, stride $s{=}16$, $10\%$ hint dropout). Filled blue circles are 5-seed means with $\pm 1$ std error bars (seeds 0, 1, 2, 7, 42). Grey band: Baseline 5-seed mean $\pm 1$ std. Every $d \geq 2$ beats the baseline; $d=4$ is optimal but the curve is shallow---all $d \in \{3, 4, 5, 6, 8\}$ fall within $\sim$0.6\% of the optimum, indicating the improvement is robust to the specific degree choice. Full ablations over stride, basis, and hint dropout are in Appendix~\ref{app:ablations}.}
 \label{fig:degree-sweep}
 \vskip -0.1in
 \end{figure}
 
-Figure~\ref{fig:degree-sweep} sweeps the Chebyshev polynomial degree $d \in \{2,3,4,5,6,7,8\}$. Two qualitative features are visible: (i) every $d \geq 2$ beats the baseline, so the improvement is robust to the specific degree choice; (ii) even-degree filters outperform odd-degree filters, which is predicted by the monic-Chebyshev coefficient structure---for even $d$, the odd-power coefficients vanish and filter taps line up at even multiples of the patch stride, matching the natural scale of cross-patch correlations. Appendix~\ref{app:ablations} reports complementary ablations (stride $s \in \{4,8,16,32\}$ with $s = P = 16$ optimal; Chebyshev basis outperforms EMA/Legendre/finite-differences; hint dropout inverted-U with $10\%$ optimum) and inference-time content ablations confirming the model exploits the specific polynomial structure rather than generic extra capacity.
+Figure~\ref{fig:degree-sweep} sweeps the Chebyshev polynomial degree $d \in \{2,3,4,5,6,7,8\}$ over 5 seeds each. Three qualitative features are visible: (i) every $d \geq 2$ beats the baseline, so the improvement is robust to the specific degree choice; (ii) the curve is shallow---the gap between best ($d=4$, $0.837$) and the second tier ($d \in \{3, 5, 6, 8\}$, $0.840$--$0.842$) is comparable to the seed-to-seed standard deviation, so we treat $d = 4$ as a representative working choice rather than a uniquely optimal one; (iii) the extreme degrees $d = 2$ ($0.850$) and $d = 7$ ($0.847$) trail the rest, consistent with the spectral interpretation: $d{=}2$ has only a single non-trivial lag while $d=7$ over-emphasises high-frequency cancellation. Appendix~\ref{app:ablations} reports complementary ablations (stride $s \in \{4,8,16,32\}$ with $s = P = 16$ optimal; Chebyshev basis outperforms EMA/Legendre/finite-differences; hint dropout inverted-U with $10\%$ optimum) and inference-time content ablations confirming the model exploits the specific polynomial structure rather than generic extra capacity.
 
 \subsection{Extended Training and Robustness}
 
@@ -455,30 +455,31 @@ At 100K steps, the capacity controls that were near-neutral at 10K now actively 
 \label{app:ablations}
 %==============================================================================
 
-All ablations use seed 0 with 10\% hint dropout unless otherwise noted.
+All ablations use seed 0 with 10\% hint dropout unless otherwise noted; the polynomial-degree sweep is the exception and is reported over $5$ seeds each.
 
 \subsection{Polynomial Degree (Chebyshev, $s=16$, 10\% dropout)}
 
 \begin{table}[h]
 \centering
 \small
-\begin{tabular}{ccccc}
+\begin{tabular}{lccc}
 \toprule
-\textbf{Degree} & \textbf{Effective lags} & \textbf{MASE} & \textbf{$\Delta$\% vs BL} & \textbf{Wins/97} \\
+\textbf{Degree} & \textbf{Effective lags} & \textbf{MASE (mean $\pm$ std, $n{=}5$)} & \textbf{$\Delta$\% vs BL} \\
 \midrule
-2 & 1 (at $2P$) & 0.8388 & $-3.20\%$ & 63 \\
-3 & 1 (at $3P$) & 0.8497 & $-1.95\%$ & 55 \\
-\textbf{4} & 2 (at $2P$, $4P$) & \textbf{0.8234} & $\mathbf{-4.99\%}$ & \textbf{66} \\
-5 & 2 (at $P$, $3P$, $5P$) & 0.8445 & $-2.56\%$ & --- \\
-6 & 3 (at $2P$, $4P$, $6P$) & 0.8345 & $-3.71\%$ & 69 \\
-7 & 3 (at $P$, $3P$, $5P$, $7P$) & 0.8397 & $-3.11\%$ & --- \\
-8 & 4 (at $2P$--$8P$) & 0.8413 & $-2.92\%$ & 62 \\
-0 (dup) & 0 & 0.8583 & $-0.96\%$ & 42 \\
+2 & 1 (at $2P$) & $0.8502 \pm 0.0125$ & $-1.33\%$ \\
+3 & 1 (at $3P$) & $0.8422 \pm 0.0053$ & $-2.27\%$ \\
+\textbf{4} & 2 (at $2P$, $4P$) & $\mathbf{0.8368 \pm 0.0092}$ & $\mathbf{-2.89\%}$ \\
+5 & 2 (at $P$, $3P$, $5P$) & $0.8423 \pm 0.0078$ & $-2.25\%$ \\
+6 & 3 (at $2P$, $4P$, $6P$) & $0.8400 \pm 0.0105$ & $-2.52\%$ \\
+7 & 3 (at $P$, $3P$, $5P$, $7P$) & $0.8470 \pm 0.0110$ & $-1.71\%$ \\
+8 & 4 (at $2P$--$8P$) & $0.8414 \pm 0.0050$ & $-2.36\%$ \\
+\midrule
+Baseline & --- & $0.8617 \pm 0.0062$ & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Degree $d=4$ is optimal. Even-degree polynomials ($d=2, 4, 6, 8$) consistently outperform odd-degree ($d=3, 5, 7$), likely because even-degree Chebyshev polynomials have more nonzero coefficients at the sampled lags.
+Every $d \geq 2$ beats the baseline. The mean curve is shallow: $d=4$ achieves the lowest geomean MASE but $d \in \{3, 5, 6, 8\}$ are within roughly one seed-to-seed standard deviation of it. The extremes $d=2$ (only one non-trivial lag) and $d=7$ (high-frequency-dominated taps) trail the rest. With single-seed evaluation the apparent optimum was sharper and even-versus-odd ordering looked systematic; the 5-seed estimates show that ordering is not robust to seed variation, while the qualitative ``every degree helps'' conclusion is.
 
 \subsection{Filter Stride (Chebyshev $d=4$, 10\% dropout)}
 

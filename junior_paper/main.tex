@@ -68,17 +68,6 @@
 \emph{Universal Sequence Preconditioning} (USP)~\citep{marsden2024universal} is a framework for online prediction in marginally stable linear dynamical systems (LDS) in which convolving observations with a fixed monic Chebyshev polynomial compresses the effective spectral radius of the hidden dynamics, yielding the first sublinear, hidden-dimension-independent regret bounds for this class. This paper empirically investigates whether the USP idea transfers to a setting of patch-based transformer foundation models for time-series forecasting, which the original paper does not cover. The setting differs from USP in three ways: the forecaster is a transformer trained from scratch on a large time-series corpus, not an online learner; the data may be far richer than a finite-dimensional LDS; and the task is multi-step forecasting rather than single-step prediction. To accommodate these differences we propose \textbf{\method{}}. We precondition our input and concatenate it as an auxiliary input \emph{channel} alongside the raw target, sidestepping the catastrophic error accumulation that direct target preconditioning would induce under multi-step rollout. Only the per-patch input projection is widened ($+12$K parameters, $0.11\%$ of Moirai-2 Small). Empirically, on the GIFT-Eval benchmark ($97$ configurations, $5$ seeds, $485$ paired comparisons) our method achieves $\Delta\mathrm{MASE}^* = -2.9\%$ over a from-scratch Moirai-2 Small baseline, winning $329/485$ paired comparisons; capacity-matched controls (duplicate channel, zero channel) confirm that the specific polynomial content drives the gain. At $100$K training steps the improvement grows to $-3.9\%$, and the gain remains $\sim 5\%$ across context lengths $512$--$4{,}000$. Cross-benchmark validation on FEV-Bench ($-2.9\%$ MASE, $72/100$ wins) confirms the finding independently.
 \end{abstract}
 
-\section*{Acknowledgments and Contributions}
-
-I am deeply grateful to my advisor, Prof.\ Elad Hazan, for suggesting the connection between universal sequence preconditioning and patch-based time series foundation models, and for numerous conversations that shaped the direction of this work. I thank Prof.\ Amit Singer for serving as second reader and for feedback on the mathematical exposition. I also thank my collaborators Alex Kawaja and Benjamin Cole, who completed this project jointly with me. Any errors are my own.
-
-\paragraph{Individual contributions.}
-The experimental design, implementation, and writing presented in this paper are my individual work. The framework of universal sequence preconditioning as applied to online prediction of linear dynamical systems is due to \citet{marsden2024universal}; the extension of that framework to patch-based transformer forecasting, the specific filter design, the empirical methodology, the statistical analysis, and all figures and tables were developed by me. Computational experiments were run on the Princeton Research Computing cluster.
-
-\paragraph{Honor Code Declaration.}
-This paper represents my own work in accordance with University regulations.\\[0.5em]
-\textit{signed Jerry Han}
-
 \tableofcontents
 %==============================================================================
 \section{Preliminaries}
@@ -787,6 +776,17 @@ Moreover, we only demonstrate the benefit of preconditioning at the small ($11.4
 \section{Conclusion}
 %==============================================================================
 In this paper, we first discussed the mathematical background of online learning of linear dynamical systems and motivate the theory behind Universal Sequence Preconditioning. We provide expository work to obtain the $\tilde O(T^{-2/13})$ regret bound for USP applied with online convex regression. We then applied these techniques to patch-based universal time series forecasters using a minimal architectural intervention that incorporates the preconditioned signal as an auxiliary channel. Empirically, on the GIFT-Eval benchmark ($-2.9\%$ MASE at $10$K steps, growing to $-3.9\%$ at $100$K; $329/485$ paired wins) and independently on FEV-Bench ($-2.9\%$ MASE, $72/100$ wins), polynomial preconditioning consistently improves a capacity-limited Moirai-2 Small model. Capacity-matched controls confirmed that the polynomial content, and not the extra parameters, drives the gain. Overall, we have demonstrated the empirical effectiveness of USP in time series forecasting, and believe that many similar improvements can be obtained by incorporating USP signals into other deep learning models.
+
+\section*{Acknowledgments and Contributions}
+
+I am deeply grateful to my advisor, Prof.\ Elad Hazan, for suggesting the connection between universal sequence preconditioning and patch-based time series foundation models, and for numerous conversations that shaped the direction of this work. I thank Prof.\ Amit Singer for serving as second reader and for feedback on the mathematical exposition. I also thank my collaborators Alex Kawaja and Benjamin Cole, who completed this project jointly with me. Any errors are my own.
+
+\paragraph{Individual contributions.}
+The experimental design, implementation, and writing presented in this paper are my individual work. The framework of universal sequence preconditioning as applied to online prediction of linear dynamical systems is due to \citet{marsden2024universal}; the extension of that framework to patch-based transformer forecasting, the specific filter design, the empirical methodology, the statistical analysis, and all figures and tables were developed by me. Computational experiments were run on the Princeton Research Computing cluster.
+
+\paragraph{Honor Code Declaration.}
+This paper represents my own work in accordance with University regulations.\\[0.5em]
+\textit{signed Jerry Han}
 
 \newpage
 \bibliographystyle{plainnat}

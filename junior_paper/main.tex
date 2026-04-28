@@ -65,7 +65,7 @@
 
 \begin{abstract}
 \noindent
-\emph{Universal Sequence Preconditioning} (USP)~\citep{marsden2024universal} is a framework for online prediction in marginally stable linear dynamical systems (LDS) in which convolving observations with a fixed monic Chebyshev polynomial compresses the effective spectral radius of the hidden dynamics, yielding the first sublinear, hidden-dimension-independent regret bounds for this class. This paper empirically investigates whether the USP idea transfers to a setting of patch-based transformer foundation models for time-series forecasting, which the original paper does not cover. The setting differs from in three ways: the forecaster is a pretrained transformer, not an online learner; the data may be far richer than a finite-dimensional LDS; and the task is multi-step forecasting rather than single-step prediction. To accommodate these differences we propose \textbf{\method{}}. We precondition our input and concatenate it as an auxiliary input \emph{channel} alongside the raw target, sidestepping the catastrophic error accumulation that direct target preconditioning would induce under multi-step rollout. Only the per-patch input projection is widened ($+12$K parameters, $0.11\%$ of Moirai-2 Small). Empirically, on the GIFT-Eval benchmark ($97$ configurations, $5$ seeds, $485$ paired comparisons) our method achieves $\Delta\mathrm{MASE}^* = -2.9\%$ over a from-scratch Moirai-2 Small baseline, winning $329/485$ paired comparisons; capacity-matched controls (duplicate channel, zero channel) confirm that the specific polynomial content drives the gain. At $100$K training steps the improvement grows to $-3.9\%$, and the gain remains $\sim 5\%$ across context lengths $512$--$4{,}000$. Cross-benchmark validation on FEV-Bench ($-2.9\%$ MASE, $72/100$ wins) confirms the finding independently.
+\emph{Universal Sequence Preconditioning} (USP)~\citep{marsden2024universal} is a framework for online prediction in marginally stable linear dynamical systems (LDS) in which convolving observations with a fixed monic Chebyshev polynomial compresses the effective spectral radius of the hidden dynamics, yielding the first sublinear, hidden-dimension-independent regret bounds for this class. This paper empirically investigates whether the USP idea transfers to a setting of patch-based transformer foundation models for time-series forecasting, which the original paper does not cover. The setting differs from USP in three ways: the forecaster is a pretrained transformer, not an online learner; the data may be far richer than a finite-dimensional LDS; and the task is multi-step forecasting rather than single-step prediction. To accommodate these differences we propose \textbf{\method{}}. We precondition our input and concatenate it as an auxiliary input \emph{channel} alongside the raw target, sidestepping the catastrophic error accumulation that direct target preconditioning would induce under multi-step rollout. Only the per-patch input projection is widened ($+12$K parameters, $0.11\%$ of Moirai-2 Small). Empirically, on the GIFT-Eval benchmark ($97$ configurations, $5$ seeds, $485$ paired comparisons) our method achieves $\Delta\mathrm{MASE}^* = -2.9\%$ over a from-scratch Moirai-2 Small baseline, winning $329/485$ paired comparisons; capacity-matched controls (duplicate channel, zero channel) confirm that the specific polynomial content drives the gain. At $100$K training steps the improvement grows to $-3.9\%$, and the gain remains $\sim 5\%$ across context lengths $512$--$4{,}000$. Cross-benchmark validation on FEV-Bench ($-2.9\%$ MASE, $72/100$ wins) confirms the finding independently.
 \end{abstract}
 
 \section*{Acknowledgments and Contributions}
@@ -202,38 +202,38 @@ Theorem~\ref{thm:cayley-hamilton} shows that linear predictors are not just a he
 \subsection{Spectral Filtering: Compressing Long Memory}
 \label{sec:spectral-filtering-prelim}
 
-Spectral filtering was introduced by \citet{hazan2017learning} to learn LDSs without explicit system identification and without a long finite-memory window; it is the immediate mathematical predecessor of universal sequence preconditioning. The exposition in \citet[Ch.~11]{hazan2025onlinecontrol} begins with the scalar impulse-response vectors
+The Cayley--Hamilton representation (Theorem~\ref{thm:cayley-hamilton}) requires memory $d_x$, the hidden dimension. Spectral filtering, introduced by \citet{hazan2017learning}, compresses this to $O(\log^2 T)$ parameters---independent of both $d_x$ and the stability margin $1 - \rho$---under the following assumptions:
+\begin{enumerate}[leftmargin=1.5em, itemsep=0.1em, topsep=0.2em]
+    \item $A$ is symmetric (equivalently, diagonalisable with real eigenvalues $\lambda_i \in [-1, 1]$);
+    \item $\rho(A) \leq 1$ (marginal stability is allowed);
+    \item bounded inputs $\norm{u_t}_2 \leq 1$ and bounded system norms $\norm{B}\norm{C} \leq C_{\mathrm{domain}}$.
+\end{enumerate}
+
+The key idea is to replace the raw-history basis $\{u_{t-1}, u_{t-2}, \ldots\}$ with a compressed spectral basis. Because $A$ is symmetric, the impulse response of the LDS decomposes into scalar geometric decays $\alpha^t$ with $\alpha = \lambda_i \in [0, 1]$. Consider the family of impulse-response vectors
 \begin{equation}
     \mu_\alpha \;=\; \begin{bmatrix} 1 & \alpha & \alpha^2 & \cdots & \alpha^{T-1} \end{bmatrix}^\top, \qquad \alpha \in [0, 1],
     \label{eq:impulse-vector}
 \end{equation}
-and the Hankel/Hilbert matrix
+and the Hankel-like matrix that integrates over all such responses:
 \begin{equation}
     Z_T \;:=\; \int_0^1 \mu_\alpha \mu_\alpha^\top \, d\alpha \in \R^{T \times T},
     \qquad (Z_T)_{ij} = \frac{1}{i + j + 1} \quad (i, j = 0, \ldots, T - 1).
     \label{eq:hankel-matrix}
 \end{equation}
-Let $\phi_1, \ldots, \phi_T$ be the eigenvectors of $Z_T$, ordered by decreasing eigenvalue. The eigenvalues of $Z_T$ decay rapidly:
+The eigenvalues of $Z_T$ decay exponentially \citep[Thm.~11.1]{hazan2025onlinecontrol}:
 \begin{equation}
-    \sigma_k(Z_T) \;\leq\; 4 \pi^2 \exp\!\left(-\frac{k}{\log T}\right) \qquad (k, T > 1),
+    \sigma_k(Z_T) \;\leq\; 4 \pi^2 \exp\!\left(-\frac{k}{\log T}\right) \qquad (k, T > 1).
     \label{eq:hankel-decay}
 \end{equation}
-as stated in \citet[Thm.~11.1]{hazan2025onlinecontrol}. This decay implies that the first polylogarithmically many eigenvectors approximate the family of impulse responses $\{\mu_\alpha : \alpha \in [0, 1]\}$ well.
-
-The resulting spectral predictor uses the features $\langle \tilde u_t, \phi_i \rangle$, where $\tilde u_t = (u_{t-1}, u_{t-2}, \ldots, u_1, 0, \ldots, 0)$. In the scalar case,
+This rapid decay is the reason spectral filtering is efficient: the top $h = O(\log^2 T / \varepsilon)$ eigenvectors $\phi_1, \ldots, \phi_h$ of $Z_T$ suffice to $\varepsilon$-approximate every impulse response in the family $\{\mu_\alpha : \alpha \in [0, 1]\}$, and therefore every scalar component of the LDS's response. The spectral predictor projects the input history onto this basis:
 \begin{equation}
-    \hat y_t \;=\; \sum_{i=1}^{h} M_i \, \langle \tilde u_t, \phi_i \rangle.
+    \hat y_t \;=\; \sum_{i=1}^{h} M_i \, \langle \tilde u_t, \phi_i \rangle,
     \label{eq:spectral-predictor}
 \end{equation}
-The crucial assumption is that $A$ is \emph{symmetric} (or more generally, diagonalisable over the reals): diagonalising $A = P \Lambda P^{-1}$ with real $\Lambda$ reduces the high-dimensional impulse response to a sum of scalar responses of the form~\eqref{eq:impulse-vector} with $\alpha = \lambda_i \in [0, 1]$, and the parameter count $h = O(\log^2 T / \varepsilon)$ suffices to $\varepsilon$-approximate the entire optimal-predictor class independent of $d_x$ and $1 - \rho$. The online learner then runs a convex online algorithm over the coefficients $M_i$. To summarise, spectral filtering requires:
-\begin{enumerate}[leftmargin=1.5em, itemsep=0.1em, topsep=0.2em]
-    \item $A$ is symmetric (equivalently, diagonalisable with real eigenvalues);
-    \item $\rho(A) \leq 1$ (marginal stability is allowed);
-    \item bounded inputs $\norm{u_t}_2 \leq 1$ and bounded system norms $\norm{B}\norm{C} \leq C_{\mathrm{domain}}$.
-\end{enumerate}
-Under these assumptions, spectral filtering achieves sublinear regret with $O(\log^2 T)$ parameters, independent of $d_x$.
+where $\tilde u_t = (u_{t-1}, u_{t-2}, \ldots, u_1, 0, \ldots, 0)$. The coefficients $M_i$ are learned online via OGD (Theorem~\ref{thm:ogd-linear-predictors}), yielding sublinear regret with $h = O(\log^2 T)$ parameters.
 
-The preceding stable-system picture becomes significantly less favourable when eigenvalues approach the unit circle, and even more so when $A$ is asymmetric. \citet[Thm.~12.1]{hazan2025onlinecontrol} gives a cyclic-permutation LDS construction in which any online learner incurs expected cumulative squared loss $\Omega(d_x)$ over $T \geq d_x$ rounds before the hidden state is revealed. The asymmetric extension of spectral filtering is more delicate; the universal-sequence-preconditioning technique we describe in Section~\ref{sec:precondition} is one approach to this regime, and is the immediate mathematical foundation of our method.
+\paragraph{Limitations: asymmetry and the unit circle.}
+The preceding development requires $A$ to be symmetric so that the eigenvalues are real and the impulse responses have the scalar form~\eqref{eq:impulse-vector}. When $A$ is asymmetric, eigenvalues may be complex, and the impulse responses involve oscillating terms $\abs{\lambda}^t e^{i \arg(\lambda) t}$ that cannot be captured by the real-valued basis $\{\mu_\alpha\}$. \citet[Thm.~12.1]{hazan2025onlinecontrol} gives a cyclic-permutation LDS construction showing that any online learner incurs expected cumulative squared loss $\Omega(d_x)$ over $T \geq d_x$ rounds for general asymmetric systems---a fundamental barrier. The universal-sequence-preconditioning technique we describe in Section~\ref{sec:precondition} addresses this barrier: by polynomially compressing the spectral radius before learning, USP extends sublinear regret guarantees to asymmetric systems whose eigenvalue arguments are at most $O(1/\log^2 T)$.
 
 %==============================================================================
 \section{Universal Sequence Preconditioning}
@@ -335,7 +335,7 @@ Algorithm~\ref{alg:usp-regression} instantiates this framework with convex regre
 \STATE Assert $c_0 = 1$.
 \FOR{$t = 1$ \TO $T$}
     \STATE Receive input $u_t$.
-    \STATE Predict $\hat y_t(Q^t) = -\sum_{i=1}^{n} c_i\, y_{t-i} + \sum_{j=0}^{n} Q_j^t\, u_{t-j}$.
+    \STATE Predict $\hat y_t(Q^t) = -\sum_{i=1}^{n} c_i\, y_{t-i} + \sum_{j=0}^{n-1} Q_j^t\, u_{t-j}$.
     \STATE Observe $y_t$; suffer loss $\ell_t(Q^t) = \norm{\hat y_t(Q^t) - y_t}_1$.
     \STATE Update: $Q^{t+1} \leftarrow \mathrm{proj}_{\mathcal{K}}\!\bigl(Q^t - \eta_t \nabla_Q \ell_t(Q^t)\bigr)$.
 \ENDFOR
@@ -376,7 +376,7 @@ Under the hypotheses of Theorem~\ref{thm:usp-general}, if additionally $\max_{j 
 By Theorem~\ref{thm:usp-general}, it suffices to bound $\norm{\boldsymbol{c}}_1$ and $\max_\lambda \abs{p_n^c(\lambda)}$ for the monic Chebyshev polynomial. Lemma~3.2 of \citet{marsden2024universal} gives $\norm{\boldsymbol{c}}_\infty \leq 2^{0.3n}$, hence $\norm{\boldsymbol{c}}_1 \leq (n+1) \cdot 2^{0.3n}$. For the spectral bound, Lemma~3.1 of \citet{marsden2024universal} shows that $\max_\lambda \abs{\tilde T_n(\lambda)} \leq 2^{-(n-2)}$ when each eigenvalue $\lambda$ satisfies $\abs{\arg(\lambda)} \leq 1/(64n^2)$. Substituting into~\eqref{eq:usp-regret-general} and balancing the two terms by setting $n = \tfrac{15}{13} \log_2 T$ yields the $T^{-2/13}$ average-loss rate.
 \end{proof}
 
-\noindent For comparison, vanilla regression without preconditioning---i.e., setting $n = 0$ in Theorem~\ref{thm:usp-general} so that $\max_\lambda \abs{p_0^c(\lambda)} = 1$---achieves cumulative regret $O(C_{\mathrm{domain}} \sqrt{d_{\mathrm{out}}}\, T^{5/2})$ \citep[p.~5]{marsden2024universal}, which is \emph{not} sublinear in $T$. USP with spectral filtering (Algorithm~3 of \citet{marsden2024universal}) improves the rate further to $\tilde O(T^{-3/13})$ by learning the $\aleph_2$ term as well, at the cost of a more complex spectral basis. Most important, we attain provable regret bounds that are independent of hidden dimension. 
+\noindent For comparison, vanilla regression without preconditioning---i.e., setting $n = 0$ in Theorem~\ref{thm:usp-general} so that $\max_\lambda \abs{p_0^c(\lambda)} = 1$---achieves cumulative regret $O(C_{\mathrm{domain}} \sqrt{d_{\mathrm{out}}}\, T^{5/2})$ \citep[p.~5]{marsden2024universal}, which is \emph{not} sublinear in $T$. USP with spectral filtering (Algorithm~3 of \citet{marsden2024universal}) improves the rate further to $\tilde O(T^{-3/13})$ by learning the $\aleph_2$ term as well, at the cost of a more complex spectral basis. Both rates are \emph{independent of the hidden dimension} $d_h$---the signature contribution of USP. These bounds apply to the online LDS setting of \citet{marsden2024universal}; our empirical method (Section~\ref{sec:method}) uses the same Chebyshev filter but in a different setting (pretrained transformer, batch training), so the formal guarantees do not directly transfer.
 
 %==============================================================================
 \section{Patch-based Transformers for Forecasting}
@@ -393,7 +393,7 @@ Our experiments are conducted on \emph{Moirai-2 Small}~\citep{liu2024moirai2}, t
 A patch-based transformer forecaster~\citep{nie2023patchtst, woo2024unified, liu2024moirai2} proceeds as follows. Given a univariate history $x_{1:T}$, partition it into non-overlapping patches $\mathbf{p}_i = (x_{(i-1)P+1}, \ldots, x_{iP})$ of length $P$ for $i=1, \ldots, T/P$. A per-patch projection (in Moirai-2, a residual block of two linear layers with a SiLU nonlinearity) maps each patch to an embedding $\mathbf{e}_i \in \R^{d_{\text{model}}}$. These embeddings are fed to a transformer block stack whose output is decoded into a predictive distribution over future patches via a per-patch projection head. Two features of this architecture are salient for our development:
 \begin{itemize}[leftmargin=1.5em, itemsep=0.1em, topsep=0.2em]
     \item \emph{Cross-patch information must be learned via attention.} Before the first self-attention operation, $\mathbf{e}_i$ is a function of $\mathbf{p}_i$ alone; it contains no information about $\mathbf{p}_{i-1}$, $\mathbf{p}_{i+1}$, or more distant patches. Patterns whose natural temporal scale exceeds $P$ time steps (e.g., daily periodicities in $15$-minute data, spanning $96$ steps or $6$ patches at $P=16$) must be discovered end-to-end by the attention layers above the projection.
-    \item \emph{The per-patch projection is narrow.} For Moirai-2 Small ($P=16$, $d_{\text{model}}=384$), the projection's input dimension is $2P = 32$ (target plus observation mask), so it has roughly $32 \cdot 384 \approx 12{,}000$ parameters out of $11.4$M total ($\sim 0.1\%$). Adding a third $P$-dimensional input channel costs an additional $P \cdot d_{\text{model}} = 6{,}144$ parameters; altering downstream layers, in contrast, is much more expensive.
+    \item \emph{The per-patch projection is narrow.} For Moirai-2 Small ($P=16$, $d_{\text{model}}=384$), the projection's input dimension is $2P = 32$ (target plus observation mask), so it has roughly $32 \cdot 384 \approx 12{,}000$ parameters out of $11.4$M total ($\sim 0.1\%$). Adding a third $P$-dimensional input channel costs $\approx 12$K additional parameters ($P \cdot d_{\text{model}} = 6{,}144$ in the first linear layer plus $\approx 6{,}000$ in the residual path); altering downstream layers, in contrast, is much more expensive.
 \end{itemize}
 These two observations motivate \emph{input-side} preconditioning: a fixed preconditioning filter applied before patching can inject cross-patch information into each $\mathbf{e}_i$ at negligible parameter cost, leaving the rest of the network untouched.
 
@@ -432,7 +432,7 @@ At inference, the model is presented with the full observed history followed by 
 \subsection{Evaluation: GIFT-Eval}
 \label{sec:gifteval}
 
-We evaluate on \textsc{GIFT-Eval}~\citep{vijay2024gifteval}, an open benchmark of $97$ dataset $\times$ horizon configurations spanning $24$ datasets and $7$ frequency classes (sub-hourly through yearly), curated to test the zero-shot generalization claim of universal forecasters. Each configuration specifies a held-out split, prediction horizon, and patch-size convention; we follow the recommended convention of $P = 8$ for quarterly data and $P = 32$ for all other frequencies, with context length $4{,}000$. The remainder of this subsection rigorously defines the metric we report.
+We evaluate on \textsc{GIFT-Eval}~\citep{vijay2024gifteval}, an open benchmark of $97$ dataset $\times$ horizon configurations spanning $24$ datasets and $7$ frequency classes (sub-hourly through yearly), curated to test the zero-shot generalization claim of universal forecasters. Each configuration specifies a held-out split, prediction horizon, and patch-size convention; we follow the recommended convention of $P = 8$ for quarterly data and $P = 32$ for all other frequencies, with context length $4{,}000$. Note that these evaluation-time patch sizes differ from the architecture's default $P = 16$ (Section~\ref{sec:moirai-arch}); Moirai-2 supports variable patch sizes at inference. Our preconditioning filter stride $s$ is always set equal to the evaluation-time patch size $P$. The remainder of this subsection rigorously defines the metric we report.
 
 \paragraph{Mean Absolute Scaled Error (MASE).}
 For a single test series with point forecast $\hat y_{t}$ and ground-truth $y_{t}$ over a prediction window of length $H$, the \emph{Mean Absolute Scaled Error} \citep{hyndman2006another} is defined as
@@ -491,7 +491,7 @@ Our setting differs from the LDS online-prediction setting in three ways: (i) th
 \end{equation}
 alongside the original $x$. We work with the residual rather than the full filter output because the original signal is already provided by the unmodified target channel; the residual captures the \emph{novel} cross-patch information injected by preconditioning. Despite the differences from the original LDS setting, the spectral intuition transfers: a Chebyshev preconditioner shapes the input's spectrum minimax-optimally, and a patch-based transformer facing a signal whose spectrum has been shaped to highlight multi-patch correlations is plausibly better-equipped to capture them.
 
-We now describe the architectural modification that delivers the preconditioning channel of Eq.~\eqref{eq:residual-channel} into the model. Let $x \in \R^T$ be a univariate input series, normalised to zero mean and unit variance over the observed prefix. We form the residual $r_t = \sum_{k=1}^{d} c_k\, x_{t-ks}$, where $c_{1:d}$ are the non-leading coefficients of the monic Chebyshev polynomial $\tilde T_d$, over the full sequence \emph{before} patching, then partition $r$ into patches $\mathbf{r}_i$ of length $P$ aligned with the target patches $\mathbf{p}_i$. The per-patch input projection is widened to accept the augmented triple $(\mathbf{p}_i, \mathbf{m}_i, \mathbf{r}_i)$:
+We now describe the architectural modification that delivers the preconditioning channel of Eq.~\eqref{eq:residual-channel} into the model. Let $x \in \R^T$ be a univariate input series, normalised to zero mean and unit variance over the observed prefix. We form the residual $r_t = \sum_{k=1}^{d} c_k\, x_{t-ks}$, where $c_{1:d}$ are the non-leading coefficients of the monic Chebyshev polynomial $\tilde T_d$. Because the filter uses only past lags ($k \geq 1$), $r_t$ depends only on $x_{t-s}, x_{t-2s}, \ldots, x_{t-ds}$ and never on future values; positions in the prediction window where the target is masked are zeroed before filtering. The residual is then partitioned into patches $\mathbf{r}_i$ of length $P$ aligned with the target patches $\mathbf{p}_i$. The per-patch input projection is widened to accept the augmented triple $(\mathbf{p}_i, \mathbf{m}_i, \mathbf{r}_i)$:
 \begin{equation}
     \mathbf{e}_i = \mathrm{ResBlock}_{3P \to d_{\text{model}}}\bigl([\mathbf{p}_i; \mathbf{m}_i; \mathbf{r}_i]\bigr) \in \R^{d_{\text{model}}},
     \label{eq:method-projection}
@@ -954,7 +954,7 @@ $8$ & $x^8 - 2 x^6 + \tfrac{5}{4} x^4 - \tfrac{1}{4} x^2 + \tfrac{1}{128}$ & $(0
 \end{tabular}
 \end{table}
 
-For odd $d$, the residual filter at stride $s$ has a tap at $x_{t-0} = x_t$ that cancels with the identity term, so the residual contains only \emph{even} lags $2s, 4s, \ldots$, regardless of polynomial parity in $x$. For example, the $d=3$ residual at $s = 16$ is supported only at lag $32$; the $d=5$ residual at $s = 16$ is supported at lags $32$ and $64$.
+For odd $d$, the monic Chebyshev polynomial $\tilde T_d(z)$ has zero coefficients at all even powers of $z$ (since $T_d(-z) = -T_d(z)$ for odd $d$). Writing $\tilde T_d(z) = z^d + c_1 z^{d-1} + \cdots + c_d$ in descending powers, the coefficients $c_k$ with even $k$ (i.e., at odd powers of $z$) vanish. Since the residual $r_t = \sum_{k=1}^d c_k x_{t-ks}$ sums over these coefficients, only the odd-indexed $c_k$ contribute, yielding nonzero taps at even multiples of $s$ only. For example, the $d=3$ residual at $s = 16$ is supported only at lag $2s = 32$; the $d=5$ residual at $s = 16$ is supported at lags $2s = 32$ and $4s = 64$.
 
 \paragraph{Monic Chebyshev second kind, $\tilde U_d(x) = U_d(x)/2^d$.}
 Defined by $U_0 = 1$, $U_1(x) = 2x$, $U_{d+1}(x) = 2x U_d(x) - U_{d-1}(x)$. The first few monic forms and corresponding residual FIRs at $s = 16$ are:
@@ -1131,7 +1131,7 @@ The ordering Normal $\gg$ Baseline $>$ Zero $>$ Random $>$ Duplicate confirms th
 \label{app:fevbench}
 %==============================================================================
 
-To verify that our findings generalize beyond GIFT-Eval, we evaluate on FEV-Bench \citep{das2024decoder} ($100$ tasks), an independent time-series forecasting benchmark, and reproduce the polynomial-degree sweep.
+To verify that our findings generalize beyond GIFT-Eval, we evaluate on FEV-Bench~\citep{shchur2025fevbench} ($100$ tasks), an independent time-series forecasting benchmark, and reproduce the polynomial-degree sweep.
 
 \begin{table}[h]
 \centering
@@ -1143,16 +1143,16 @@ To verify that our findings generalize beyond GIFT-Eval, we evaluate on FEV-Benc
 \midrule
 2 & $1.2780 \pm 0.0039$ & $-0.99\%$ & $1.0425 \pm 0.0032$ \\
 3 & $1.2609 \pm 0.0173$ & $-2.32\%$ & $1.0288 \pm 0.0125$ \\
-\textbf{4} & $\mathbf{1.2532 \pm 0.0064}$ & $\mathbf{-2.92\%}$ & $\mathbf{1.0236 \pm 0.0053}$ \\
+4$^\dagger$ & $1.2532 \pm 0.0064$ & $-2.92\%$ & $1.0236 \pm 0.0053$ \\
 5 & $1.2639 \pm 0.0069$ & $-2.08\%$ & $1.0309 \pm 0.0063$ \\
 6 & $1.2521 \pm 0.0068$ & $-3.00\%$ & $1.0236 \pm 0.0060$ \\
 7 & $1.2564 \pm 0.0114$ & $-2.66\%$ & $1.0263 \pm 0.0094$ \\
-8 & $1.2518 \pm 0.0082$ & $-3.02\%$ & $1.0228 \pm 0.0059$ \\
+\textbf{8} & $\mathbf{1.2518 \pm 0.0082}$ & $\mathbf{-3.02\%}$ & $\mathbf{1.0228 \pm 0.0059}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\HD{} ($d=4$) improves geometric-mean MASE by $2.91\%$ on FEV-Bench (5-seed mean $1.2532 \pm 0.0064$ vs.\ Baseline $1.2908$) and SQL (Salesforce's scaled quantile loss) by $3.09\%$ ($1.0236 \pm 0.0053$ vs.\ $1.0562$). The FEV-Bench degree sweep reproduces the qualitative GIFT-Eval pattern: every $d \geq 2$ beats Baseline, the curve is shallow, and $d \in \{4, 6, 8\}$ are statistically tied at the optimum.
+\HD{} ($d=4$, our default; marked $\dagger$) improves geometric-mean MASE by $2.91\%$ on FEV-Bench (5-seed mean $1.2532 \pm 0.0064$ vs.\ Baseline $1.2908$) and SQL by $3.09\%$ ($1.0236 \pm 0.0053$ vs.\ $1.0562$). The best-performing degree on FEV-Bench is $d = 8$ (bold), though $d \in \{4, 6, 8\}$ are within one standard deviation of each other. The degree sweep reproduces the qualitative GIFT-Eval pattern: every $d \geq 2$ beats Baseline and the curve is shallow.
 
 %==============================================================================
 \section{Comparison to Official Moirai 2.0}

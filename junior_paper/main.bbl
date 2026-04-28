@@ -1,4 +1,4 @@
-\begin{thebibliography}{25}
+\begin{thebibliography}{18}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -12,15 +12,6 @@ Abdul~Fatir Ansari, Lorenzo Stella, Caner Turkmen, Xiyuan Zhang, Pedro Mercado,
   Arango, Shubham Kapoor, et~al.
 \newblock Chronos: Learning the language of time series.
 \newblock In \emph{ICML}, 2024.
-
-\bibitem[Auer et~al.(2025)Auer, Podest, Klotz, B{\"o}ck, Klambauer, and
-  Hochreiter]{auer2025tirex}
-Andreas Auer, Patrick Podest, Daniel Klotz, Sebastian B{\"o}ck, G{\"u}nter
-  Klambauer, and Sepp Hochreiter.
-\newblock {TiRex}: Zero-shot forecasting across long and short horizons.
-\newblock In \emph{ICML Workshop on Foundation Models for Structured Data
-  (FMSD)}, 2025.
-\newblock URL \url{https://openreview.net/forum?id=cWrbpOZGRa}.
 
 \bibitem[Das et~al.(2024{\natexlab{a}})Das, Kong, Leber, Mathews, and
   Sen]{das2024timesfm}
@@ -40,23 +31,6 @@ Philip~J. Davis.
 \newblock \emph{Interpolation and Approximation}.
 \newblock Dover, 1975.
 
-\bibitem[Dosovitskiy et~al.(2021)Dosovitskiy, Beyer, Kolesnikov, Weissenborn,
-  Zhai, Unterthiner, Dehghani, Minderer, Heigold, Gelly, Uszkoreit, and
-  Houlsby]{dosovitskiy2021image}
-Alexei Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn,
-  Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg
-  Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby.
-\newblock An image is worth 16x16 words: Transformers for image recognition at
-  scale.
-\newblock In \emph{ICLR}, 2021.
-
-\bibitem[Goswami et~al.(2024)Goswami, Szafer, Choudhry, Cai, Li, and
-  Dubrawski]{goswami2024moment}
-Mononito Goswami, Konrad Szafer, Arjun Choudhry, Yifu Cai, Shuo Li, and Artur
-  Dubrawski.
-\newblock Moment: A family of open time-series foundation models.
-\newblock \emph{arXiv preprint arXiv:2402.03885}, 2024.
-
 \bibitem[Hazan and Singh(2025)]{hazan2025onlinecontrol}
 Elad Hazan and Karan Singh.
 \newblock \emph{Introduction to Online Control}.
@@ -66,12 +40,6 @@ Elad Hazan and Karan Singh.
 Elad Hazan, Karan Singh, and Cyril Zhang.
 \newblock Learning linear dynamical systems via spectral filtering.
 \newblock In \emph{NeurIPS}, 2017.
-
-\bibitem[Hazan et~al.(2018)Hazan, Lee, Singh, Zhang, and
-  Zhang]{hazan2018spectral}
-Elad Hazan, Holden Lee, Karan Singh, Cyril Zhang, and Yi~Zhang.
-\newblock Spectral filtering for general linear dynamical systems.
-\newblock In \emph{NeurIPS}, 2018.
 
 \bibitem[Hyndman and Koehler(2006)]{hyndman2006another}
 Rob~J. Hyndman and Anne~B. Koehler.
@@ -111,18 +79,6 @@ Yuqi Nie, Nam~H. Nguyen, Phanwadee Sinthong, and Jayant Kalagnanam.
   transformers.
 \newblock In \emph{ICLR}, 2023.
 
-\bibitem[Oppenheim et~al.(1999)Oppenheim, Schafer, and
-  Buck]{oppenheim1999discrete}
-Alan~V. Oppenheim, Ronald~W. Schafer, and John~R. Buck.
-\newblock \emph{Discrete-Time Signal Processing}.
-\newblock Prentice Hall, 1999.
-
-\bibitem[Parks and McClellan(1972)]{parks1972chebyshev}
-Thomas~W. Parks and James~H. McClellan.
-\newblock Chebyshev approximation for nonrecursive digital filters with linear
-  phase.
-\newblock \emph{IEEE Transactions on Circuit Theory}, 1972.
-
 \bibitem[Shazeer(2020)]{shazeer2020glu}
 Noam Shazeer.
 \newblock Glu variants improve transformer.
@@ -150,14 +106,5 @@ Gerald Woo, Chenghao Liu, Akshat Kumar, Caiming Xiong, Silvio Savarese, and
 Biao Zhang and Rico Sennrich.
 \newblock Root mean square layer normalization.
 \newblock In \emph{NeurIPS}, 2019.
-
-\bibitem[Zhang et~al.(2025)Zhang, Zeng, Zhang, Xu, Zheng, Gao, Jiang, and
-  Zheng]{zhang2025tsfmready}
-Yunkai Zhang, Qi~Zeng, Yawen Zhang, Zhijie Xu, Ming Zheng, Chongyang Gao, Muyan
-  Jiang, and Zeyu Zheng.
-\newblock Are time series foundation models ready for zero-shot forecasting?
-\newblock In \emph{ICML Workshop on Foundation Models for Structured Data
-  (FMSD)}, 2025.
-\newblock URL \url{https://openreview.net/forum?id=kQDzqIkXLO}.
 
 \end{thebibliography}

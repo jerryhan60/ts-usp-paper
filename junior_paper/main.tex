@@ -507,28 +507,52 @@ During training, each patch's preconditioning channel is independently zeroed wi
 For Moirai-2 Small ($P = 16$, $d_{\text{model}} = 384$), widening the first linear layer from $32 \to 384$ (target + mask) to $48 \to 384$ (target + mask + preconditioning) adds $16 \cdot 384 = 6{,}144$ parameters; the residual path contributes another $\approx 6{,}000$. The total overhead is $\approx 12$K parameters, or $0.105\%$ of the $11.4$M baseline. No other parameters are added.
 
 \begin{algorithm}[t]
-\caption{Polynomial Input Preconditioning for Patch-based Forecasting}
-\label{alg:poly-hint}
+\caption{Training with Polynomial Input Preconditioning}
+\label{alg:poly-train}
 \begin{algorithmic}[1]
-\REQUIRE Input series $x_{1:T}$; monic Chebyshev coefficients $c_{1:d}$ (fixed, from $\tilde T_d$); stride $s = P$; dropout rate $p_{\mathrm{drop}}$.
-\ENSURE Patch embeddings $\mathbf{e}_1, \ldots, \mathbf{e}_{T/P}$.
-\FOR[Compute residual channel]{$t = 1$ \TO $T$}
-    \STATE $r_t \leftarrow \sum_{k=1}^{d} c_k \cdot x_{t - ks}$
-\ENDFOR
-\FOR[Patch and embed]{$i = 1$ \TO $T/P$}
-    \STATE $\mathbf{p}_i \leftarrow (x_{(i-1)P+1}, \ldots, x_{iP})$
-    \STATE $\mathbf{m}_i \leftarrow$ observation mask for patch $i$
-    \STATE $\mathbf{r}_i \leftarrow (r_{(i-1)P+1}, \ldots, r_{iP})$
-    \IF{training \AND $\mathrm{Bernoulli}(p_{\mathrm{drop}})$}
+\REQUIRE Packed patched sequence $\mathbf{p}_{1:N}$ with observation masks $\mathbf{m}_{1:N}$; prefix ratio $\alpha = 0.3$; mask ratio $\beta = 0.5$; Chebyshev coefficients $c_{1:d}$ (fixed); stride $s = P$; channel dropout rate $p_{\mathrm{drop}} = 0.1$; multi-token horizon $K = 4$.
+\STATE \textbf{Partition:} first $\lfloor \alpha N \rfloor$ patches are context; remaining patches are prediction window.
+\STATE \textbf{$z$-score:} compute $\mu, \sigma$ from observed values in the context patches. Set $\tilde{\mathbf{p}}_i \leftarrow (\mathbf{p}_i - \mu)/\sigma$ for all $i$.
+\STATE \textbf{Mask:} for each prediction-window patch independently with probability $\beta$: zero out $\tilde{\mathbf{p}}_i$ and $\mathbf{m}_i$.
+\FOR[Preconditioning residual]{$i = 1$ \TO $N$}
+    \STATE $\mathbf{r}_i \leftarrow \sum_{k=1}^{d} c_k \cdot \tilde{\mathbf{p}}_{i-k}$ \COMMENT{Stride $s{=}P$ $\Rightarrow$ lag $k$ patches}
+    \IF{$\mathrm{Bernoulli}(p_{\mathrm{drop}})$}
         \STATE $\mathbf{r}_i \leftarrow \mathbf{0}$ \COMMENT{Channel dropout}
     \ENDIF
-    \STATE $\mathbf{e}_i \leftarrow \mathrm{ResBlock}_{3P \to d_{\mathrm{model}}}([\mathbf{p}_i;\, \mathbf{m}_i;\, \mathbf{r}_i])$
 \ENDFOR
-\STATE Feed $\mathbf{e}_{1:T/P}$ to the (unmodified) transformer decoder.
+\FOR[Embed]{$i = 1$ \TO $N$}
+    \STATE $\mathbf{e}_i \leftarrow \mathrm{ResBlock}_{3P \to d_{\mathrm{model}}}([\tilde{\mathbf{p}}_i;\, \mathbf{m}_i;\, \mathbf{r}_i])$
+\ENDFOR
+\STATE $\mathbf{h}_{1:N} \leftarrow \mathrm{TransformerDecoder}(\mathbf{e}_{1:N})$ \COMMENT{Causal attention}
+\STATE $\hat{\mathbf{y}}_{i}^{(q,k)} \leftarrow \mathrm{OutProj}(\mathbf{h}_i)$ for quantiles $q \in \mathcal{Q}$, horizons $k \in \{1,\ldots,K\}$.
+\STATE $\mathcal{L} \leftarrow \frac{1}{|\mathcal{Q}|} \sum_{q,i,k} \rho_q\!\bigl(\tilde{\mathbf{p}}_{i+k} - \hat{\mathbf{y}}_i^{(q,k)}\bigr)$ over prediction-window positions.
+\STATE Update all trainable parameters (ResBlock, Transformer, OutProj) via $\nabla \mathcal{L}$.
 \end{algorithmic}
 \end{algorithm}
 
-Algorithm~\ref{alg:poly-hint} summarises the complete procedure. The Chebyshev coefficients are fixed at initialisation and never updated; the only trainable parameters are the widened input projection weights.
+\begin{algorithm}[t]
+\caption{Inference with Polynomial Input Preconditioning}
+\label{alg:poly-infer}
+\begin{algorithmic}[1]
+\REQUIRE Observed history $x_{1:T}$; prediction length $H$; Chebyshev coefficients $c_{1:d}$ (fixed); stride $s = P$; multi-token horizon $K = 4$; quantile levels $\mathcal{Q} = \{0.1, \ldots, 0.9\}$.
+\ENSURE Point forecasts $\hat{x}_{T+1:T+H}$.
+\STATE \textbf{$z$-score:} compute $\mu, \sigma$ from $x_{1:T}$. Set $\tilde{x}_t \leftarrow (x_t - \mu)/\sigma$ for $t = 1, \ldots, T$.
+\STATE \textbf{Patchify context:} $\tilde{\mathbf{p}}_i \leftarrow (\tilde{x}_{(i-1)P+1}, \ldots, \tilde{x}_{iP})$, $\mathbf{m}_i \leftarrow \mathbf{1}$ for $i = 1, \ldots, T/P$.
+\STATE Initialise prediction patches: $\tilde{\mathbf{p}}_{T/P+j} \leftarrow \mathbf{0}$, $\mathbf{m}_{T/P+j} \leftarrow \mathbf{0}$ for $j = 1, \ldots, \lceil H/P \rceil$.
+\STATE \textbf{Compute residual:} $\mathbf{r}_i \leftarrow \sum_{k=1}^{d} c_k \cdot \tilde{\mathbf{p}}_{i-k}$ for all patches $i$. \COMMENT{No dropout at inference}
+\STATE \textbf{Embed, decode:} $\mathbf{e}_i \leftarrow \mathrm{ResBlock}([\tilde{\mathbf{p}}_i; \mathbf{m}_i; \mathbf{r}_i])$; $\mathbf{h}_{1:N} \leftarrow \mathrm{TransformerDecoder}(\mathbf{e}_{1:N})$.
+\STATE \textbf{Read predictions:} from the last context patch $i^* = T/P$, extract $\hat{\mathbf{y}}_{i^*}^{(0.5, k)}$ for $k = 1, \ldots, K$. These are the median forecasts for the next $K$ patches ($KP$ time steps).
+\IF[Direct prediction]{$H \leq KP$}
+    \STATE \textbf{Return} $\hat{x}_{T+1:T+H} \leftarrow \sigma \cdot \hat{\mathbf{y}}^{(0.5)}_{1:H} + \mu$.
+\ELSE[Autoregressive rollout]
+    \STATE Fill predicted patches into context: $\tilde{\mathbf{p}}_{i^*+k} \leftarrow \hat{\mathbf{y}}_{i^*}^{(0.5,k)}$, $\mathbf{m}_{i^*+k} \leftarrow \mathbf{1}$.
+    \STATE Recompute $\mathbf{r}$ for newly filled patches using predicted values.
+    \STATE Repeat from \textbf{Embed, decode} with extended context until $H$ steps are covered.
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+Algorithms~\ref{alg:poly-train} and~\ref{alg:poly-infer} describe training and inference respectively. Three points are worth noting. First, because the stride $s$ equals the patch size $P$, the preconditioning residual $\mathbf{r}_i$ at patch $i$ depends on patches $i{-}1, i{-}2, \ldots, i{-}d$, making the computation a simple lag over patches rather than individual time steps. Second, the Chebyshev coefficients are fixed throughout; the only trainable parameters are the widened input projection and the existing transformer and output-projection weights. Third, during autoregressive rollout (Algorithm~\ref{alg:poly-infer}, line 11), the residual $\mathbf{r}$ for newly predicted patches is computed from the model's own median predictions, which may be noisy; the channel dropout applied during training (Algorithm~\ref{alg:poly-train}, line 8) regularises against this mismatch.
 
 %==============================================================================
 \section{Empirical Results}

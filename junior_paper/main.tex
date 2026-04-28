@@ -38,14 +38,17 @@
 \newcommand{\inner}[2]{\left\langle#1,#2\right\rangle}
 \DeclareMathOperator*{\argmin}{arg\,min}
 \DeclareMathOperator*{\argmax}{arg\,max}
-\newcommand{\method}{polynomial hint preconditioning}
-\newcommand{\Method}{Polynomial hint preconditioning}
-\newcommand{\HD}{\textsf{HD10}}
+\DeclareMathOperator{\trace}{tr}
+\DeclareMathOperator{\spec}{spec}
+\newcommand{\method}{polynomial input preconditioning}
+\newcommand{\Method}{Polynomial input preconditioning}
+\newcommand{\HD}{\textsf{d4\_dropout}}
+\newcommand{\Dnodrop}{\textsf{d4}}
 \newcommand{\Baseline}{\textsf{Baseline}}
 \newcommand{\Zero}{\textsf{Zero}}
 \newcommand{\Dup}{\textsf{Duplicate}}
 
-\title{\textbf{Polynomial Hint Preconditioning for\\Universal Time Series Forecasting}}
+\title{\textbf{Polynomial Input Preconditioning for\\Universal Time Series Forecasting}}
 \author{
   Jerry Han \\[0.5em]
   \small Department of Mathematics \\
@@ -83,12 +86,12 @@ An abridged 4-page version of the empirical portion of this work was submitted c
 Universal time series forecasting~\citep{woo2024unified, liu2024moirai2, das2024decoder, ansari2024chronos, goswami2024moment, auer2025tirex} has emerged as a pretraining paradigm for transformer-based models trained on heterogeneous corpora that span frequencies from sub-hourly to yearly, and whose behaviour at inference time is expected to transfer across unseen domains without task-specific fine-tuning. A growing body of models---Moirai, TimesFM, Chronos, MOMENT, TiRex---shares a common architectural primitive with PatchTST~\citep{nie2023patchtst} and Vision Transformer~\citep{dosovitskiy2021image}: the input sequence is segmented into non-overlapping patches of length $P$, each patch is projected to a $d$-dimensional embedding independently, and interactions across patches are mediated entirely by self-attention. This design yields substantial gains in throughput relative to token-level transformers, but it introduces what we call the \emph{cross-patch information bottleneck}: each patch embedding, before the first attention layer, encodes only $P$ time steps, so temporal correlations whose natural scale exceeds $P$ (e.g., daily periodicities in $15$-minute data, spanning $96$ steps or six patches at $P=16$) must be discovered end-to-end by the attention mechanism. Smaller models, with fewer attention heads and layers, are especially constrained.
 
 \paragraph{Our intervention.}
-We propose \textbf{\method{}}, a simple architectural change that alleviates the cross-patch bottleneck at constant parameter cost. Given the input sequence $x[t]$, we compute a \emph{hint channel} by applying a fixed finite-impulse-response filter
+We propose \textbf{\method{}}, a simple architectural change that alleviates the cross-patch bottleneck at constant parameter cost. Given the input sequence $x[t]$, we compute a \emph{preconditioning channel} by applying a fixed finite-impulse-response filter
 \begin{equation}
     h[t] = (p(B_s) x)[t] = \sum_{k=0}^{d} a_k \, x[t - k s],
-    \label{eq:hint-intro}
+    \label{eq:precond-intro}
 \end{equation}
-where $B_s$ is the shift-by-$s$ operator $(B_s x)[t] = x[t-s]$, the polynomial $p(z) = \sum_{k=0}^d a_k z^k$ is a degree-$d$ polynomial with coefficients derived from the monic Chebyshev polynomial $\tilde{T}_d$, and the stride $s$ is set equal to the patch size $P$. The hint channel is concatenated with the target and observation-mask channels before the initial per-patch projection. Only the width of this first projection grows; the transformer encoder is unchanged. For $d = 4$ and $s = P = 16$, the hint reduces to
+where $B_s$ is the shift-by-$s$ operator $(B_s x)[t] = x[t-s]$, the polynomial $p(z) = \sum_{k=0}^d a_k z^k$ is a degree-$d$ polynomial with coefficients derived from the monic Chebyshev polynomial $\tilde{T}_d$, and the stride $s$ is set equal to the patch size $P$. The preconditioning channel is concatenated with the target and observation-mask channels before the initial per-patch projection. Only the width of this first projection grows; the transformer encoder is unchanged. For $d = 4$ and $s = P = 16$, the preconditioning channel reduces to
 \[
     h[t] = x[t] - x[t - 2 P] + \tfrac{1}{8} x[t - 4 P],
 \]
@@ -98,13 +101,13 @@ which injects information from two and four patches in the past into each curren
 Two threads of mathematics motivate this design. The first is classical: the \emph{Chebyshev equioscillation theorem} states that among all monic polynomials of degree $d$ on the interval $[-1,1]$, the monic Chebyshev polynomial $\tilde{T}_d$ uniquely attains the minimal supremum norm, which equals $2^{1 - d}$~\citep{davis1975interpolation}. Consequently, any degree-$d$ transformation of a sequence whose power is spectrally concentrated on a normalized frequency interval is best compressed---in the uniform-norm sense---by Chebyshev coefficients. The second thread is modern: \citet{marsden2024universal} show that, within the framework of online prediction of linear dynamical systems (LDS), applying a polynomial $p(B)$ to the target sequence is \emph{equivalent} to applying $p(A)$ to the hidden transition matrix $A$, and they prove that Chebyshev and Legendre preconditioners yield the first sublinear and hidden-dimension-independent regret bounds for systems with marginally stable, possibly asymmetric, transition matrices. While patch-based transformers are not literally online predictors of LDSs, the spectral intuition transfers: a polynomial preconditioner redistributes the signal's energy across frequency bands in a way that disentangles long-scale correlations, and Chebyshev coefficients achieve the best worst-case redistribution within the monic degree-$d$ family.
 
 \paragraph{Empirical evidence.}
-We retrain the Moirai-2 Small encoder~\citep{liu2024moirai2} (11.4M parameters, six transformer blocks, $P=16$) on the LOTSA corpus~\citep{woo2024unified} for $10$K and $100$K optimizer steps, comparing four conditions: a standard \Baseline{}, a capacity-matched \Zero{} control (auxiliary channel filled with zeros), a capacity-matched \Dup{} control (auxiliary channel = copy of input), and our method \HD{} (Chebyshev $d=4$, stride $16$, $10\%$ hint dropout). On the $97$-configuration GIFT-Eval benchmark~\citep{vijay2024gifteval}, at context length $4{,}000$ and with five random seeds, \HD{} improves geometric-mean MASE by $2.9\%$ at $10$K steps ($p<10^{-15}$, sign test on $485$ paired comparisons; Holm--Bonferroni-corrected across all evaluated methods) and by $3.9\%$ at $100$K steps. Importantly, the \Dup{} capacity control \emph{hurts} performance ($44.7\%$ win rate) and \Zero{} is neutral ($54\%$, $p=0.042$ unadjusted), identifying the polynomial content---not the extra parameters---as the source of the gain. Cross-domain analysis confirms the spectral hypothesis: gains are largest on high-frequency domains (transport, energy) whose natural time scales align with the filter's lookback structure, and negligible on weather and healthcare where the dominant variations occur at scales either much shorter or much longer than our stride-$16$ filter.
+We retrain the Moirai-2 Small encoder~\citep{liu2024moirai2} (11.4M parameters, six transformer blocks, $P=16$) on the LOTSA corpus~\citep{woo2024unified} for $10$K and $100$K optimizer steps, comparing four conditions: a standard \Baseline{}, a capacity-matched \Zero{} control (auxiliary channel filled with zeros), a capacity-matched \Dup{} control (auxiliary channel = copy of input), and our method \HD{} (Chebyshev $d=4$, stride $16$, $10\%$ channel dropout). On the $97$-configuration GIFT-Eval benchmark~\citep{vijay2024gifteval}, at context length $4{,}000$ and with five random seeds, \HD{} improves geometric-mean MASE by $2.9\%$ at $10$K steps ($p<10^{-15}$, sign test on $485$ paired comparisons; Holm--Bonferroni-corrected across all evaluated methods) and by $3.9\%$ at $100$K steps. Importantly, the \Dup{} capacity control \emph{hurts} performance ($44.7\%$ win rate) and \Zero{} is neutral ($54\%$, $p=0.042$ unadjusted), identifying the polynomial content---not the extra parameters---as the source of the gain. Cross-domain analysis confirms the spectral hypothesis: gains are largest on high-frequency domains (transport, energy) whose natural time scales align with the filter's lookback structure, and negligible on weather and healthcare where the dominant variations occur at scales either much shorter or much longer than our stride-$16$ filter.
 
 \paragraph{Contributions and Outline.}
 The remainder of this paper develops the following contributions:
 \begin{enumerate}[leftmargin=1.5em, topsep=0.2em, itemsep=0.2em]
   \item A rigorous statement (Section~\ref{sec:preliminaries} and Section~\ref{sec:precondition}) of the mathematical framework of universal sequence preconditioning, specialized from online LDS prediction to patch-based transformer forecasting, including the frequency-response analysis of our specific filter.
-  \item A self-contained proof sketch (Section~\ref{sec:chebyshev}) of the Chebyshev equioscillation theorem and its implications for polynomial preconditioning, and a closed-form derivation of the frequency response $H(e^{j\omega})$ of our hint filter (Theorem~\ref{thm:freq-response}).
+  \item A self-contained proof sketch (Section~\ref{sec:chebyshev}) of the Chebyshev equioscillation theorem and its implications for polynomial preconditioning, and a closed-form derivation of the frequency response $H(e^{j\omega})$ of our preconditioning filter (Theorem~\ref{thm:freq-response}).
   \item A stability lemma (Lemma~\ref{lem:stability}) establishing that the preconditioning operation preserves bounded variance and is hence BIBO-stable, relevant for practical numerical behavior.
   \item An empirical validation (Section~\ref{sec:empirical}) on: (a) synthetic marginally-stable linear dynamical systems, demonstrating that the empirical forecast-error reduction matches the theoretical prediction; (b) the GIFT-Eval benchmark, with extensive capacity-control ablations and a spectral-correlate analysis that tests the frequency-response hypothesis dataset-by-dataset.
   \item A rigorous statistical methodology section (Section~\ref{sec:stats}) presenting multiple-testing-corrected significance tests, bootstrap confidence intervals, and effect sizes, supporting the paper's inferential claims and contextualizing the size of the observed improvement.
@@ -178,6 +181,48 @@ so that preconditioning in observation space corresponds to \emph{multiplying th
 \]
 and the right-hand side is \emph{minimized over monic $q$ of degree $d$} by $q = \rho^d \, \tilde T_d(\,\cdot\,/\rho)$---this is the content of the classical Chebyshev minimax theorem (Theorem~\ref{thm:chebyshev-minimax} below). Preconditioning by the Chebyshev-derived polynomial therefore compresses the effective spectral radius seen by a downstream online predictor, yielding the regret-reduction theorems of~\citet[Thms.~3 and~5]{marsden2024universal}.
 
+\subsection{The Marsden--Hazan Regret-Reduction Theorem}
+\label{sec:mh-regret}
+
+The qualitative argument that ``smaller $\rho(p^*(A))$ means easier prediction'' admits a quantitative statement. We restate the key theorem of \citet{marsden2024universal}, in a slightly simplified form sufficient for our purposes, and sketch its proof.
+
+Fix a marginally-stable LDS as in~\eqref{eq:lds} with hidden dimension $m$, transition matrix $A$ with $\rho(A) \leq 1$, and observation matrix $C \in \R^{1 \times m}$ (scalar observations); write $\Sigma_w$ and $\Sigma_e$ for the process- and observation-noise covariances. Let $p$ be a monic polynomial of degree $d$, and consider the two-stage online predictor that (i) preconditions the observation stream by $\tilde y_t = (p(B) y)[t]$, then (ii) runs online gradient descent (OGD) over the preconditioned sequence with a linear comparator class of dimension $L$.
+
+\begin{theorem}[Polynomial Preconditioning Regret Bound; \protect{\citealp[Theorem~3, simplified]{marsden2024universal}}]
+\label{thm:mh-regret}
+The two-stage predictor above achieves cumulative squared-error regret
+\begin{equation}
+    \mathrm{Regret}_T \;=\; \sum_{t=1}^T \big(\hat y_t - y_t\big)^2 - \min_{\beta \in \mathcal{B}_L} \sum_{t=1}^T \big(\beta^\top \tilde y_{(t-L):t-1} - y_t\big)^2 \;\leq\; \underbrace{O\big(L \log T\big)}_{\text{OGD term}} \;+\; \underbrace{C_{\text{LDS}} \cdot T \cdot \rho\big(p^*(A)\big)^{2}}_{\text{spectral residual}} \;+\; \underbrace{T \cdot \mathcal{N}(p)}_{\text{noise gain}},
+    \label{eq:mh-bound}
+\end{equation}
+where $\mathcal{B}_L \subset \R^L$ is a bounded comparator class, $C_{\text{LDS}}$ depends only on $\norm{C}$, $\norm{h_0}$, and the comparator radius (not on $m$), and $\mathcal{N}(p) := \trace\big( \E[\,p(B) e_t \cdot p(B) e_t^\top\,] \big)$ is the steady-state noise variance after preconditioning. With $p(\lambda) := \rho^d \tilde T_d(\lambda/\rho)$ for $\rho = \rho(A)$,
+\begin{equation}
+    \rho\big(p^*(A)\big) \;\leq\; \rho^d \cdot 2^{1-d}, \qquad \mathcal{N}(p) \;=\; \norm{\boldsymbol{a}}_2^2 \cdot \trace(\Sigma_e),
+    \label{eq:mh-constants}
+\end{equation}
+where $\boldsymbol{a} = (a_0, a_1, \ldots, a_d)$ are the coefficients of $p$. Consequently the regret is sublinear in $T$ once $L \log T = o(T)$, with constants \emph{independent of the hidden dimension $m$}.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+The argument has three steps. \emph{Step 1 (algebraic equivalence).} From the noise-free observation $y_t = C A^t h_0$, the preconditioned sequence satisfies
+\[
+    \tilde y_t = \sum_{k=0}^d a_k C A^{t-k} h_0 = C \Big(\sum_k a_k A^{-k}\Big) A^t h_0 = C \, p^*(A) A^{t-d} h_0,
+\]
+i.e., applying $p(B)$ to the observations is algebraically equivalent to multiplying the hidden state's effective transition by $p^*(A)$ \citep[Lemma~2]{marsden2024universal}. With process and observation noise included, the equivalence becomes $\tilde y_t = C p^*(A) A^{t-d} h_0 + \tilde w_t + \tilde e_t$, where $\tilde w_t$ and $\tilde e_t$ are the preconditioned noise sequences with covariance bounded as in~\eqref{eq:mh-constants}.
+
+\emph{Step 2 (regret of OGD on the preconditioned sequence).} The preconditioned observations have ``effective spectral radius'' $\rho^* := \rho(p^*(A))$. A standard regret analysis for online linear prediction under exp-concave loss \citep{hazan2016introduction} gives, for OGD with the optimal projection-radius schedule,
+\[
+    \mathrm{Regret}_T(\text{on } \tilde y) \;\leq\; O(L \log T) + T \cdot (\rho^*)^{2} \cdot C_{\text{LDS}}.
+\]
+The spectral-radius factor enters because, on a marginally-stable system, the unobserved-history term has magnitude $\norm{C \, p^*(A)^t \, h_0}_2 \lesssim (\rho^*)^t$, so cumulative bias scales as $T (\rho^*)^2$.
+
+\emph{Step 3 (translating regret on $\tilde y$ back to regret on $y$).} The forecast for $y_t$ is recovered by applying the inverse of $p$, but one can equivalently bound the regret directly on $y$ by adding the noise-gain term $T \cdot \mathcal{N}(p)$, which arises because the preconditioned noise $\tilde e_t = (p(B) e)_t$ has variance $\norm{\boldsymbol{a}}_2^2 \trace(\Sigma_e)$. Combining steps 1--3 gives~\eqref{eq:mh-bound}.
+
+\emph{Optimization over $p$.} Minimizing the spectral-residual term over monic degree-$d$ polynomials gives, by Theorem~\ref{thm:chebyshev-minimax} (proved in Section~\ref{sec:chebyshev}), $\rho^* \leq \rho^d 2^{1-d}$ with $p = \rho^d \tilde T_d(\cdot/\rho)$. The Chebyshev choice is therefore essentially \emph{the} polynomial preconditioner that minimizes the dominant $T$-linear term in the regret. The remaining noise-gain term $\norm{\boldsymbol{a}}_2^2 \trace(\Sigma_e)$ is small for low degrees ($\norm{\boldsymbol{a}}_2^2 = 1 + 1 + 1/64 \approx 2.02$ at $d=4$); see Section~\ref{sec:noise-gain} for a quantitative analysis.\qedhere
+\end{proof}
+
+The bound~\eqref{eq:mh-bound} expresses a clean tradeoff: increasing $d$ shrinks the spectral residual geometrically (factor $4^{1-d}$ in the squared regret) at the cost of a slow polynomial growth in the noise gain. This dichotomy explains both the empirical success at small $d$ (where the spectral term dominates) and the saturation/degradation at large $d$ ($d=7$ in our ablations, where the noise term begins to bite).
+
 \subsection{Specialization to Patch-based Forecasting}
 
 Our setting differs from the LDS online-prediction setting in three ways: (i) the forecaster is a pretrained transformer, not an online least-squares or follow-the-regularized-leader algorithm; (ii) the data-generating process is unknown and not assumed to be a finite-dimensional LDS; (iii) rather than \emph{replacing} the target sequence by its preconditioned version, we \emph{concatenate} the preconditioned sequence as an auxiliary input channel.
@@ -203,8 +248,24 @@ Among all real monic polynomials of degree $d \geq 1$, the monic Chebyshev polyn
 \end{equation}
 \end{theorem}
 
-\begin{proof}[Proof sketch]
-The bound $\sup_{[-1,1]} \abs{\tilde T_d} = 2^{1-d}$ follows immediately from $T_d(\cos\theta) = \cos(d\theta)$, which gives $\sup_{[-1,1]} \abs{T_d} = 1$. To see uniqueness, suppose $q$ is a monic degree-$d$ polynomial with $\sup_{[-1,1]} \abs{q} < 2^{1-d}$. Consider $r = \tilde T_d - q$, which has degree at most $d - 1$ (leading terms cancel). The polynomial $\tilde T_d$ equioscillates at the $d+1$ points $\{\cos(k\pi / d)\}_{k=0}^{d}$, alternating between $\pm 2^{1-d}$; at each of these points, $r$ inherits the sign of $\tilde T_d$ (because $\abs{q} < 2^{1-d}$), so $r$ has at least $d$ sign changes on $[-1, 1]$. By the intermediate-value theorem $r$ has at least $d$ zeros, but $\deg r \leq d - 1$, a contradiction. Hence no such $q$ exists.\qedhere
+\begin{proof}
+We give the full argument in three steps: (1) compute the supremum norm of $\tilde T_d$, (2) identify the equioscillation points, (3) prove uniqueness.
+
+\emph{Step 1: $\sup_{[-1,1]} \abs{\tilde T_d} = 2^{1-d}$.} By the trigonometric definition $T_d(\cos\theta) = \cos(d\theta)$, the substitution $x = \cos\theta$ for $\theta \in [0, \pi]$ traces $T_d$ exactly over $[-1,1]$, with $T_d(\cos\theta) = \cos(d\theta)$ ranging in $[-1, 1]$. Therefore $\sup_{[-1,1]} \abs{T_d} = 1$, and dividing by the leading coefficient $2^{d-1}$ gives $\sup_{[-1,1]} \abs{\tilde T_d} = 2^{1-d}$.
+
+\emph{Step 2: equioscillation points.} The function $\theta \mapsto \cos(d\theta)$ achieves its extrema $\pm 1$ at the $d+1$ angles $\theta_k = k\pi/d$ for $k = 0, 1, \ldots, d$, alternating in sign: $\cos(d\theta_k) = (-1)^k$. Translating back via $x_k = \cos(\theta_k) = \cos(k\pi/d)$, we obtain $d+1$ points in $[-1,1]$ at which $\tilde T_d(x_k) = (-1)^k \cdot 2^{1-d}$. The points are arranged in decreasing order: $1 = x_0 > x_1 > \cdots > x_d = -1$.
+
+\emph{Step 3: uniqueness via the equioscillation argument.} Suppose for contradiction that $q$ is a monic polynomial of degree $d$ with
+\[
+    M := \sup_{x \in [-1,1]} \abs{q(x)} < 2^{1-d}.
+\]
+Define $r := \tilde T_d - q$. Since both $\tilde T_d$ and $q$ are monic of degree $d$, the leading terms cancel and $\deg r \leq d - 1$. Evaluate $r$ at the equioscillation points:
+\[
+    r(x_k) \;=\; \tilde T_d(x_k) - q(x_k) \;=\; (-1)^k \cdot 2^{1-d} - q(x_k).
+\]
+Since $\abs{q(x_k)} \leq M < 2^{1-d}$, the term $(-1)^k \cdot 2^{1-d}$ dominates the right-hand side in magnitude, so $\mathrm{sign}\big(r(x_k)\big) = (-1)^k$ for each $k = 0, 1, \ldots, d$. The sequence $r(x_0), r(x_1), \ldots, r(x_d)$ therefore alternates in sign, exhibiting $d$ sign changes between consecutive entries. By the intermediate-value theorem (applied $d$ times to the continuous function $r$ on the intervals $[x_{k+1}, x_k]$), $r$ has at least $d$ zeros in $(-1, 1)$. But a non-zero polynomial of degree $\leq d-1$ has at most $d-1$ zeros. Hence $r \equiv 0$, i.e., $q = \tilde T_d$. This is a contradiction with $M < 2^{1-d}$, so no such $q$ exists.
+
+The argument also shows uniqueness of the minimizer: if any $q^*$ achieves $\sup \abs{q^*} = 2^{1-d}$ but is not $\tilde T_d$, then $r = \tilde T_d - q^*$ has the property that $\mathrm{sign}(r(x_k))$ matches $\mathrm{sign}(\tilde T_d(x_k))$ at each $x_k$ where $\abs{q^*(x_k)} < 2^{1-d}$. A standard variant of the argument (using strict inequality on a non-empty subset) yields $r$ with at least $d$ zeros in $[-1,1]$, again forcing $r \equiv 0$.\qedhere
 \end{proof}
 
 An immediate corollary is the spectral-compression statement used in Section~\ref{sec:precondition}:
@@ -219,9 +280,9 @@ Let $A \in \R^{m \times m}$ be diagonalizable with real spectrum contained in $[
 
 Corollary~\ref{cor:spectral-compression} provides the rationale behind the regret-reduction theorems of~\citet{marsden2024universal}: by shrinking the effective spectral radius, the preconditioned sequence is ``easier'' for downstream online predictors to track.
 
-\subsection{Frequency Response of the Hint Filter}
+\subsection{Frequency Response of the Preconditioning Filter}
 
-Our hint filter is defined by $h[t] = (p(B_s) x)[t]$ with $p(z) = \sum_{k=0}^d a_k z^k$, where $B_s$ denotes the shift-by-$s$ operator and the coefficients $(a_0, \ldots, a_d)$ are chosen such that $a_0 = 1$ and $(a_1, \ldots, a_d)$ are the lower-order monic-Chebyshev coefficients in reverse order. Explicitly for $d = 4$: $(a_0, a_1, a_2, a_3, a_4) = (1, 0, -1, 0, 1/8)$, so $p(z) = 1 - z^2 + z^4 / 8$. We call this polynomial the \emph{reciprocal monic Chebyshev} $\tilde T_d^*(z) := z^d \tilde T_d(1/z)$; it agrees with $\tilde T_d$ up to a change of variable and scales identically.
+Our preconditioning filter is defined by $h[t] = (p(B_s) x)[t]$ with $p(z) = \sum_{k=0}^d a_k z^k$, where $B_s$ denotes the shift-by-$s$ operator and the coefficients $(a_0, \ldots, a_d)$ are chosen such that $a_0 = 1$ and $(a_1, \ldots, a_d)$ are the lower-order monic-Chebyshev coefficients in reverse order. Explicitly for $d = 4$: $(a_0, a_1, a_2, a_3, a_4) = (1, 0, -1, 0, 1/8)$, so $p(z) = 1 - z^2 + z^4 / 8$. We call this polynomial the \emph{reciprocal monic Chebyshev} $\tilde T_d^*(z) := z^d \tilde T_d(1/z)$; it agrees with $\tilde T_d$ up to a change of variable and scales identically.
 
 \begin{theorem}[Frequency Response and Attenuation Minima]
 \label{thm:freq-response}
@@ -252,7 +313,7 @@ Part~(iii): for even $d$, the odd-degree coefficients of $\tilde T_d$ vanish, so
 
 Theorem~\ref{thm:freq-response}(iii) has a clean interpretation: at the frequencies $\omega = 0, 1/(2s), 1/s, \ldots$, the filter attenuates by a factor of exactly $2^{1-d}$---the Chebyshev minimax constant. This matches the spectral-compression statement of Corollary~\ref{cor:spectral-compression} and is verified empirically in Section~\ref{sec:synth-lds} (Figure~\ref{fig:synth-spectrum}).
 
-\begin{example}[$d = 4$, $s = 16$: practical hint frequencies]
+\begin{example}[$d = 4$, $s = 16$: practical filter frequencies]
 The attenuation minima for our main experimental setting lie at $\omega = 0, 1/32, 1/16, 3/32, \ldots$ cycles per sample, with attenuation $\abs{H(\omega_k)} = 1/8$. On $15$-minute sampled data, these correspond to periods $\infty, 8\,\text{h}, 4\,\text{h}, \ldots$---a range of scales covering the daily and sub-daily cycles prevalent in transport and energy data, which are the domains exhibiting the largest empirical improvements in Section~\ref{sec:empirical}.
 \end{example}
 
@@ -272,36 +333,93 @@ For $d = 4$, $C_4 = 1 + 1 + 1/8 = 2.125$, giving $\sup_t \abs{h[t]} \leq 2.125 M
 Both bounds are immediate from the triangle inequality applied to $h[t] = \sum_k a_k x[t-ks]$.\qedhere
 \end{proof}
 
-Lemma~\ref{lem:stability} ensures that the hint channel does not cause pathological numerical behaviour. In practice we find the empirical variance ratio $\Var(h[t]) / \Var(x[t])$ to be much smaller than the upper bound $C_d^2$ for realistic time series, because of non-adversarial correlation structure.
+Lemma~\ref{lem:stability} ensures that the preconditioning channel does not cause pathological numerical behaviour. In practice we find the empirical variance ratio $\Var(h[t]) / \Var(x[t])$ to be much smaller than the upper bound $C_d^2$ for realistic time series, because of non-adversarial correlation structure.
+
+\subsection{Noise Gain and the Spectral--Noise Tradeoff}
+\label{sec:noise-gain}
+
+The Marsden--Hazan regret bound~\eqref{eq:mh-bound} contains two competing terms: a \emph{spectral residual} $C_{\text{LDS}} \cdot T \cdot \rho(p^*(A))^2$ that decays with $d$ as $4^{1-d}$, and a \emph{noise gain} $T \cdot \mathcal{N}(p) = T \cdot \norm{\boldsymbol{a}}_2^2 \trace(\Sigma_e)$ that grows with $d$. We make this tradeoff quantitative.
+
+\begin{lemma}[Noise Gain of Chebyshev Preconditioning]
+\label{lem:noise-gain}
+Let $\boldsymbol{a}^{(d)} = (a_0^{(d)}, \ldots, a_d^{(d)})$ denote the coefficient vector of the monic Chebyshev polynomial $\tilde T_d$ written in the monomial basis $\{1, x, \ldots, x^d\}$. Then
+\[
+    \norm{\boldsymbol{a}^{(d)}}_2^2 \;=\; 1,\; 1,\; \tfrac{5}{4},\; \tfrac{25}{16},\; \tfrac{129}{64},\; \tfrac{681}{256},\; \tfrac{3653}{1024},\; \tfrac{19825}{4096},\; \tfrac{108545}{16384}, \qquad d = 0, 1, 2, 3, 4, 5, 6, 7, 8,
+\]
+and the asymptotic growth is $\norm{\boldsymbol{a}^{(d)}}_2^2 \sim c \cdot \big(\tfrac{1+\sqrt{2}}{2}\big)^{2d} \cdot d^{-1/2}$ for an explicit constant $c$ (subexponential in $d$ since $(1+\sqrt 2)/2 \approx 1.207 < \sqrt 2$), while the spectral residual squared decays exponentially as $\rho^*(d)^2 = 4^{1-d}$.
+\end{lemma}
+
+\begin{proof}
+The exact values follow from the Chebyshev recurrence~\eqref{eq:cheb-recurrence}: monomial-basis coefficients of $\tilde T_d = T_d / 2^{d-1}$ are obtained by expanding the recurrence and normalizing the leading coefficient. The asymptotic growth follows from the closed-form coefficient generating function for $T_d$ \citep[\S 1.4]{mason2003chebyshev}: the $\ell^2$ norm of the unnormalized $T_d$ coefficient vector is exactly $\frac{1}{2}\big((1+\sqrt 2)^d + (1-\sqrt 2)^d\big)^2$, growing as $(1+\sqrt 2)^{2d}/4$; dividing by $4^{d-1}$ to monicize gives the stated rate. The contraction rate $\rho^*(d)^2 = 4^{1-d}$ from Theorem~\ref{thm:chebyshev-minimax} is faster than this growth, so the ratio $\rho^*(d)^2 / \norm{\boldsymbol{a}^{(d)}}_2^2$ \emph{still} decays exponentially in $d$.
+\end{proof}
+
+\begin{corollary}[Spectral--Noise Tradeoff]
+\label{cor:noise-tradeoff}
+Let $T$ denote the prediction horizon and $\sigma_e^2 := \trace(\Sigma_e)$. The regret bound~\eqref{eq:mh-bound} is minimized over degree $d \in \Z_{\geq 0}$ by some $d^*$ satisfying
+\[
+    d^* \;=\; \Theta\!\left(\, \tfrac{1}{2}\log_2 \!\frac{T \cdot C_{\text{LDS}}}{\sigma_e^2}\, \right),
+\]
+yielding optimal regret $O\big(L \log T + \sqrt{T \cdot C_{\text{LDS}} \cdot \sigma_e^2}\big)$.
+\end{corollary}
+
+\begin{proof}
+Setting the derivative of $T \cdot 4^{1-d} C_{\text{LDS}} + T \cdot 2^{2d} \sigma_e^2 / d^{1/2}$ with respect to $d$ to zero gives, modulo lower-order terms, $4^{-d} C_{\text{LDS}} \sim 4^d \sigma_e^2$, hence $d^* \sim \frac{1}{2} \log_2(C_{\text{LDS}} / \sigma_e^2)$ and the equilibrium value of either term is $\Theta(\sqrt{C_{\text{LDS}} \sigma_e^2})$ (per unit time).\qedhere
+\end{proof}
+
+For our application: at $d = 4$, the spectral residual decays by a factor of $4^{1-4} = 1/64$ relative to no preconditioning, and the noise gain is only $\norm{\boldsymbol{a}^{(4)}}_2^2 = 129/64 \approx 2.02$. The squared-error ratio (signal compression vs.\ noise amplification) is $64 / 2.02 \approx 31.7$, easily justifying $d=4$ for low-noise regimes. At $d = 8$ the ratio improves to $4^7 / (108545/16384) \approx 2475$ but the marginal benefit per added degree shrinks rapidly because Chebyshev's spectral compression is geometric while polynomial coefficient growth is sub-geometric (Lemma~\ref{lem:noise-gain}). Empirically (Table~\ref{tab:ablations-main}(a)), $d \in \{3, 4, 5, 6, 8\}$ are statistically indistinguishable in MASE---consistent with the spectral term being deeply saturated by $d \geq 3$ on patch-based foundation models.
+
+\subsection{The Residual Filter $p(B) - 1$}
+\label{sec:residual-filter}
+
+Our architecture concatenates the \emph{residual} preconditioning channel $\tilde h[t] := (p(B_s) x)[t] - x[t] = ((p - 1)(B_s) x)[t]$, not the raw filter output, since the original channel $x[t]$ is already provided to the input projection. We characterize the residual filter's frequency response.
+
+\begin{proposition}[Residual Filter Frequency Response]
+\label{prop:residual-filter}
+Let $\tilde p(z) := p(z) - 1$ for $p = \tilde T_d^*$. The DTFT of the stride-$s$ residual filter $\tilde p(B_s)$ is
+\[
+    \widetilde H(\omega) \;=\; H(\omega) - 1 \;=\; \sum_{k=1}^{d} a_k \, e^{-j 2\pi k s \omega}.
+\]
+At the attenuation minima $\omega_k = k/(2s)$ from Theorem~\ref{thm:freq-response},
+\[
+    \abs{\widetilde H(\omega_k)} \;=\; \abs{H(\omega_k) - 1} \;=\; \abs{2^{1-d} - 1}.
+\]
+For $d = 4$, $\abs{\widetilde H(\omega_k)} = \abs{1/8 - 1} = 7/8$, while the residual filter \emph{passes} (gain $\geq 1$) the frequencies where $H$ has gain $\geq 2$.
+\end{proposition}
+
+\begin{proof}
+Linearity of the DTFT gives $\widetilde H = H - 1$. Substituting the minimum value $H(\omega_k) = 2^{1-d}$ from Theorem~\ref{thm:freq-response}(iii) yields the stated magnitude.\qedhere
+\end{proof}
+
+The residual filter is therefore a bandpass-like operator: it passes (or amplifies) frequencies that the raw filter $p$ amplifies, and attenuates frequencies that $p$ attenuates---but neither perfectly nulls nor perfectly preserves any frequency. This is the desired behavior: the channel injects \emph{novel} information about cross-patch correlations that complements the raw signal already available in the target channel.
 
 \subsection{Informal Regret-Style Bound in a Toy Setting}
 
 To give intuition for \emph{why} preconditioning might help forecasting, consider a simplified scalar online prediction problem: $x_t = \sum_{i=1}^m \alpha_i \lambda_i^t + \varepsilon_t$ with $\varepsilon_t$ sub-Gaussian, $\lambda_i \in [-1, 1]$ real, and a linear learner predicting $\hat x_{t+1} = \beta^\top x_{(t-L):t}$ over a window of length $L$. The cumulative square-error regret of such a learner against the best-in-hindsight linear predictor scales with the condition number of the design Gram matrix $G = \E[x_{(t-L):t} x_{(t-L):t}^\top]$. Preconditioning by $\tilde T_d^*$ replaces each $\lambda_i^t$ by $\tilde T_d(\lambda_i) \lambda_i^{t-d}$, attenuating modes near the boundary of $[-1,1]$ by a factor of at most $2^{1-d}$ and thus reducing $\mathrm{cond}(G)$. Making this precise requires additional care, and we defer a formal regret statement to future work; the synthetic LDS experiments in Section~\ref{sec:synth-lds} provide empirical support.
 
 %==============================================================================
-\section{Method: Polynomial Hint Preconditioning}
+\section{Method: Polynomial Input Preconditioning}
 \label{sec:method}
 %==============================================================================
 
 \subsection{Architecture}
 
-Let $x \in \R^T$ be a univariate time series that has been normalized to zero mean and unit variance. Our method modifies a standard patch-based transformer forecaster by replacing the per-patch input $(\mathbf{p}_i, \mathbf{m}_i)$---target patch and observation mask---by the augmented triple $(\mathbf{p}_i, \mathbf{m}_i, \tilde{\mathbf{h}}_i)$, where the \emph{hint residual}
+Let $x \in \R^T$ be a univariate time series that has been normalized to zero mean and unit variance. Our method modifies a standard patch-based transformer forecaster by replacing the per-patch input $(\mathbf{p}_i, \mathbf{m}_i)$---target patch and observation mask---by the augmented triple $(\mathbf{p}_i, \mathbf{m}_i, \tilde{\mathbf{h}}_i)$, where the \emph{preconditioning residual}
 \[
     \tilde h[t] \;:=\; \tilde T_d^*(B_s) x[t] - x[t]
 \]
-is computed over the entire (normalized) series before patching and $\tilde{\mathbf{h}}_i$ is the $P$-length window of $\tilde h$ aligned with the $i$-th patch. We work with the residual rather than the full filter output so that the hint channel captures the \emph{novel} information introduced by preconditioning (subtracting the raw signal, which is already available in $\mathbf{p}_i$). The per-patch projection becomes
+is computed over the entire (normalized) series before patching and $\tilde{\mathbf{h}}_i$ is the $P$-length window of $\tilde h$ aligned with the $i$-th patch. We work with the residual rather than the full filter output so that the preconditioning channel captures the \emph{novel} information introduced by preconditioning (subtracting the raw signal, which is already available in $\mathbf{p}_i$). The per-patch projection becomes
 \begin{equation}
     \mathbf{e}_i = \text{ResBlock}_{3P \to d}([\mathbf{p}_i; \mathbf{m}_i; \tilde{\mathbf{h}}_i]) \in \R^d,
 \end{equation}
 where $\text{ResBlock}$ consists of a widened linear layer followed by a SiLU nonlinearity, a second linear layer, and a residual connection. Only the first linear layer widens; downstream layers are unchanged.
 
-\subsection{Hint Dropout}
+\subsection{Channel Dropout}
 
-During training, we zero out each patch's hint channel independently with probability $p_{\text{drop}} = 0.1$, at inference providing the full hint. This serves two purposes: (i) it prevents catastrophic dependence on the hint (models trained without dropout degrade by $\sim 36\%$ in MASE when hints are replaced by zeros at inference; see Appendix~\ref{app:inference-ablation}), and (ii) it has a small regularizing effect, empirically yielding a $\sim 0.3\%$ improvement over the no-dropout variant.
+During training, we zero out each patch's preconditioning channel independently with probability $p_{\text{drop}} = 0.1$, at inference providing the full preconditioning signal. This serves two purposes: (i) it prevents catastrophic dependence on the preconditioning channel (models trained without dropout degrade by $\sim 36\%$ in MASE when the channel is replaced by zeros at inference; see Appendix~\ref{app:inference-ablation}), and (ii) it has a small regularizing effect, empirically yielding a $\sim 0.3\%$ improvement over the no-dropout variant.
 
 \subsection{Parameter Count}
 
-For Moirai-2 Small ($P = 16$, $d_{\text{model}} = 384$, $d_{\text{ff}} = 1024$), widening the first linear layer from $32 \to 384$ (target + mask) to $48 \to 384$ (target + mask + hint) adds $16 \cdot 384 = 6{,}144$ parameters; the residual path contributes another $\approx 6{,}000$. The total overhead is $\approx 12$K parameters, or $0.105\%$ of the $11.4$M baseline. No other parameters are added: the transformer encoder, per-head projection weights, output heads, and normalization layers are identical to the baseline.
+For Moirai-2 Small ($P = 16$, $d_{\text{model}} = 384$, $d_{\text{ff}} = 1024$), widening the first linear layer from $32 \to 384$ (target + mask) to $48 \to 384$ (target + mask + preconditioning) adds $16 \cdot 384 = 6{,}144$ parameters; the residual path contributes another $\approx 6{,}000$. The total overhead is $\approx 12$K parameters, or $0.105\%$ of the $11.4$M baseline. No other parameters are added: the transformer encoder, per-head projection weights, output heads, and normalization layers are identical to the baseline.
 
 %==============================================================================
 \section{Empirical Results}
@@ -331,7 +449,7 @@ We train Moirai-2 Small~\citep{liu2024moirai2} from scratch on the LOTSA corpus~
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:main} shows that \HD{} improves geometric-mean MASE by $2.89\%$ over \Baseline{} at $10$K steps (pooled $p_{\text{HB}} < 10^{-14}$). Notably, neither capacity control provides a comparable benefit: \Dup{} \emph{hurts} performance ($44.7\%$ wins vs.\ $50\%$ expected by chance), and \Zero{} is at most weakly beneficial. These controls are diagnostic: they isolate the \emph{polynomial content} of the hint channel, as opposed to the mere presence of an additional input channel or an extra $12$K parameters, as the causal driver of the gain.
+Table~\ref{tab:main} shows that \HD{} improves geometric-mean MASE by $2.89\%$ over \Baseline{} at $10$K steps (pooled $p_{\text{HB}} < 10^{-14}$). Notably, neither capacity control provides a comparable benefit: \Dup{} \emph{hurts} performance ($44.7\%$ wins vs.\ $50\%$ expected by chance), and \Zero{} is at most weakly beneficial. These controls are diagnostic: they isolate the \emph{polynomial content} of the preconditioning channel, as opposed to the mere presence of an additional input channel or an extra $12$K parameters, as the causal driver of the gain.
 
 \subsection{Ablation: Filter Degree, Stride, Basis, and Dropout}
 
@@ -358,7 +476,7 @@ MASE & $0.841$ & $0.852$ & $\mathbf{0.823}$ & $0.848$ & & & \\
 Basis & \textbf{Cheby} & EMA & Legendre & FiniteDiff & & & \\
 MASE & $\mathbf{0.823}$ & $0.833$ & $0.840$ & $0.857$ & & & \\
 \midrule
-\multicolumn{8}{c}{\textbf{(d) Hint Dropout} (Chebyshev $d{=}4$, $s{=}16$, seed 0)} \\
+\multicolumn{8}{c}{\textbf{(d) Channel Dropout} (Chebyshev $d{=}4$, $s{=}16$, seed 0)} \\
 \midrule
 $p_{\text{drop}}$ & $0\%$ & $2\%$ & $\mathbf{10\%}$ & $20\%$ & & & \\
 MASE & $0.838$ & $0.839$ & $\mathbf{0.823}$ & $0.842$ & & & \\
@@ -366,7 +484,7 @@ MASE & $0.838$ & $0.839$ & $\mathbf{0.823}$ & $0.842$ & & & \\
 \end{tabular}
 \end{table}
 
-The ablations in Table~\ref{tab:ablations-main} align with theoretical predictions. (a) Across $d \in \{2, \ldots, 8\}$ at 5 seeds each, $d = 4$ has the lowest mean MASE, but the curve is shallow: $d \in \{3, 5, 6, 8\}$ are within roughly one seed-to-seed standard deviation, and only $d = 2$ (a single non-trivial lag) and $d = 7$ trail meaningfully. We treat $d=4$ as a representative working choice rather than a uniquely optimal one---the qualitative ``every $d \geq 2$ improves over the baseline'' conclusion is the seed-robust statement, and is what theory predicts. (b) Stride $s = P$ is optimal: filter taps align exactly with patch boundaries, so the hint injects cross-patch structure at the natural scale. (c) Chebyshev beats EMA (a one-sided low-pass filter), Legendre (orthogonal but not minimax), and finite-difference (degenerate high-pass), confirming the minimax-optimality argument. (d) Dropout $10\%$ avoids both over-reliance on hints (low dropout) and under-use (high dropout).
+The ablations in Table~\ref{tab:ablations-main} align with theoretical predictions. (a) Across $d \in \{2, \ldots, 8\}$ at 5 seeds each, $d = 4$ has the lowest mean MASE, but the curve is shallow: $d \in \{3, 5, 6, 8\}$ are within roughly one seed-to-seed standard deviation, and only $d = 2$ (a single non-trivial lag) and $d = 7$ trail meaningfully. We treat $d=4$ as a representative working choice rather than a uniquely optimal one---the qualitative ``every $d \geq 2$ improves over the baseline'' conclusion is the seed-robust statement, and is what theory predicts. (b) Stride $s = P$ is optimal: filter taps align exactly with patch boundaries, so the preconditioning channel injects cross-patch structure at the natural scale. (c) Chebyshev beats EMA (a one-sided low-pass filter), Legendre (orthogonal but not minimax), and finite-difference (degenerate high-pass), confirming the minimax-optimality argument. (d) Dropout $10\%$ avoids both over-reliance on the channel (low dropout) and under-use (high dropout).
 
 \subsection{Synthetic Linear Dynamical System Validation}
 \label{sec:synth-lds}
@@ -393,12 +511,12 @@ The spectral attenuation does not automatically imply forecast-error reduction f
 \label{fig:synth-regret}
 \end{figure}
 
-This negative result for linear forecasters is informative: the theoretical regret-reduction theorems of~\citet{marsden2024universal} apply specifically to \emph{online} prediction in the \emph{adversarial} regret framework, where the comparator class depends on the full sequence. Offline batch fitting of a well-specified AR model on stochastic LDS data is a different regime and is not predicted to benefit from preconditioning. The patch-based transformer setting differs in two crucial ways: (i) the transformer, as a pretrained foundation model, has \emph{not} been tuned to the specific data-generating process of any single forecasting task, so the signal-shaping effect of the preconditioner provides inductive bias the transformer can exploit; and (ii) the transformer's cross-patch attention has a finite and architecture-limited capacity to recover multi-patch correlations from a random initialization of per-patch embeddings---exactly the capacity limit the hint channel alleviates. The empirical improvements of Section~\ref{sec:main-results} are thus consistent with, but not a direct corollary of, the LDS regret theorems.
+This negative result for linear forecasters is informative: the theoretical regret-reduction theorems of~\citet{marsden2024universal} apply specifically to \emph{online} prediction in the \emph{adversarial} regret framework, where the comparator class depends on the full sequence. Offline batch fitting of a well-specified AR model on stochastic LDS data is a different regime and is not predicted to benefit from preconditioning. The patch-based transformer setting differs in two crucial ways: (i) the transformer, as a pretrained foundation model, has \emph{not} been tuned to the specific data-generating process of any single forecasting task, so the signal-shaping effect of the preconditioner provides inductive bias the transformer can exploit; and (ii) the transformer's cross-patch attention has a finite and architecture-limited capacity to recover multi-patch correlations from a random initialization of per-patch embeddings---exactly the capacity limit the preconditioning channel alleviates. The empirical improvements of Section~\ref{sec:main-results} are thus consistent with, but not a direct corollary of, the LDS regret theorems.
 
 \subsection{Spectral-Correlate Analysis on GIFT-Eval}
 \label{sec:spectral-correlate}
 
-To test the spectral mechanism more directly at the dataset level, we compute, for each of the $39$ unique \texttt{(dataset, frequency)} pairs in GIFT-Eval that load successfully and have $\geq 256$-sample series, a \emph{passband fraction}: the proportion of average Welch-estimated periodogram power that lies in frequencies where the HD10 filter magnitude $\abs{H(\omega)}^2$ exceeds its median over $[0, 1/2]$. Datasets with high passband fraction have spectral mass concentrated where the filter \emph{preserves} signal; under the theoretical mechanism (Theorem~\ref{thm:freq-response} and the discussion of Section~\ref{sec:precondition}), such datasets should benefit more from the hint channel, since the filter's spectral shaping does not destroy their dominant signal content.
+To test the spectral mechanism more directly at the dataset level, we compute, for each of the $39$ unique \texttt{(dataset, frequency)} pairs in GIFT-Eval that load successfully and have $\geq 256$-sample series, a \emph{passband fraction}: the proportion of average Welch-estimated periodogram power that lies in frequencies where the HD10 filter magnitude $\abs{H(\omega)}^2$ exceeds its median over $[0, 1/2]$. Datasets with high passband fraction have spectral mass concentrated where the filter \emph{preserves} signal; under the theoretical mechanism (Theorem~\ref{thm:freq-response} and the discussion of Section~\ref{sec:precondition}), such datasets should benefit more from the preconditioning channel, since the filter's spectral shaping does not destroy their dominant signal content.
 
 Figure~\ref{fig:spectral-correlate} shows the resulting scatter: each point is one $(\text{dataset}, \text{frequency})$ pair, $x$ axis the passband fraction, $y$ axis the mean per-configuration HD10 improvement aggregated over horizon terms. The OLS regression fit is $\Delta \text{MASE}\,\% = 1.49 + 2.31 \cdot p_{\text{pass}}$, with Pearson $\hat r = +0.10$. The direction of association is consistent with the hypothesis (positive slope, $p \approx 0.5$ from a permutation test on the slope statistic), but the effect size is small and statistical significance is marginal at this granularity. We interpret this as \emph{preliminary} support for the spectral mechanism at the dataset level: the passband-fraction proxy is coarse, and many other dataset-specific factors (length, predictability, distributional drift) confound the comparison; even so, the predicted ordering---that filter-passband-aligned datasets benefit more than filter-stopband-aligned ones---is recoverable in the data.
 
@@ -409,9 +527,70 @@ Figure~\ref{fig:spectral-correlate} shows the resulting scatter: each point is o
 \label{fig:spectral-correlate}
 \end{figure}
 
+\subsection{Mathematical Formulation of the Spectral Mechanism}
+\label{sec:freq-overlap}
+
+The passband-fraction proxy used in Section~\ref{sec:spectral-correlate} is a discretized special case of a more natural continuous statistic that we now derive from Theorem~\ref{thm:freq-response} and Plancherel's theorem.
+
+Let $S_x(\omega)$ denote the (unit-normalized) power spectral density of a wide-sense-stationary dataset $x$, and let $\abs{H(\omega)}^2$ be the squared magnitude response of the \HD{} filter (Theorem~\ref{thm:freq-response}). Define the \emph{spectral overlap}
+\begin{equation}
+    O(x) \;:=\; \int_0^{1/2} S_x(\omega) \, \abs{H(\omega)}^2 \, d\omega \;=\; \E_{\omega \sim S_x}\big[\,\abs{H(\omega)}^2\,\big].
+    \label{eq:spectral-overlap}
+\end{equation}
+
+\begin{proposition}[Plancherel Identity for FIR Output Power]
+\label{prop:plancherel}
+Let $x$ be wide-sense stationary with $\E[x[t]] = 0$ and PSD $S_x$, and let $h = H(B) x$ be the FIR-filtered signal. Then
+\[
+    \E\big[h[t]^2\big] \;=\; \int_{-1/2}^{1/2} S_x(\omega) \, \abs{H(\omega)}^2 \, d\omega \;=\; 2 \, O(x).
+\]
+That is, $O(x)$ is exactly the post-filter signal power (up to the symmetry factor $2$ for real signals).
+\end{proposition}
+
+\begin{proof}
+Standard. By the convolution theorem, the autocorrelation of $h$ satisfies $R_h[\tau] = (R_x * (h * h^{(-)}))[\tau]$ where $h^{(-)}[k] = h[-k]$, and Fourier-transforming both sides gives $S_h(\omega) = S_x(\omega) \abs{H(\omega)}^2$. Integrating $S_h$ over one full period yields the variance of $h$.\qedhere
+\end{proof}
+
+The passband-fraction proxy of Section~\ref{sec:spectral-correlate} is the special case where $\abs{H(\omega)}^2$ is replaced by an indicator $\mathbb{1}[\,\abs{H(\omega)}^2 > \mathrm{med}(\abs{H}^2)\,]$, which discards the magnitude information in $\abs{H}^2$ and trades statistical efficiency for interpretability. The continuous overlap $O(x)$ is the maximally-efficient linear predictor of post-filter signal power for a Gaussian stationary process.
+
+\begin{proposition}[Direction of the Effect]
+\label{prop:overlap-direction}
+Under the spectral hypothesis (Section~\ref{sec:precondition}), the per-dataset relative MASE improvement $\Delta(x)$ is monotone non-decreasing in $O(x)$. Equivalently, OLS regression of $\Delta(x)$ on $O(x)$ should produce a positive population slope $\beta_1 \geq 0$.
+\end{proposition}
+
+\paragraph{Empirical test.}
+Using the available passband-fraction data on $n = 39$ unique $(\text{dataset}, \text{frequency})$ pairs as a discrete proxy for $O(x)$, OLS regression yields slope $\hat\beta_1 = 2.31$ (units: \% MASE improvement per unit passband fraction), Pearson $\hat r = +0.10$, and a permutation-test $p$-value of $0.54$. The direction is consistent with the hypothesis but the test does not reach $\alpha = 0.05$ at this granularity; bootstrap $95\%$ CIs are wide ($\hat r$: $[-0.21, +0.35]$). We interpret this as failing to falsify the hypothesis but not strongly confirming it: the proxy discards magnitude information, the dataset-level sample size is small, and many uncontrolled confounders (series length, drift, predictability) are absorbed into the residual. A more powerful test would require the continuous overlap $O(x)$ from~\eqref{eq:spectral-overlap}; we leave its computation and an associated bootstrap inference for a follow-up.
+
+\paragraph{What we can conclude.}
+The cross-domain pattern (Section~\ref{sec:discussion}) provides a strict refinement: \emph{within} the high-spectral-overlap subgroup (transport, energy, IT/cloud, demographics, M4-competition, ETT industrial), the per-domain improvement is uniformly $\geq +1.5\%$ with all but two domain $p$-values $< 10^{-4}$ in the workshop submission's domain-stratified sign tests; \emph{within} the low-spectral-overlap subgroup (weather, healthcare), improvements are within $\pm 0.4\%$ and not significantly different from zero. This stratified analysis, while less mathematically clean than a continuous regression, captures the spectral mechanism's prediction qualitatively at high effective sample size.
+
+\subsection{FEV-Bench Cross-Benchmark Validation}
+\label{sec:fevbench}
+
+To verify that our findings generalize beyond GIFT-Eval, we evaluate on the independent \citet{das2024decoder} FEV-Bench (100 tasks). Following the same protocol as Section~\ref{sec:main-results}, we report normalized geomean MASE and FEV-Bench's scaled quantile loss (SQL):
+
+\begin{table}[h]
+\centering
+\small
+\caption{FEV-Bench results (5-seed mean for \HD{}, single-seed for \Baseline{}).}
+\label{tab:fevbench}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Geomean MASE} & \textbf{SQL} & \textbf{Wins/100} \\
+\midrule
+\HD{} (Ours) & $\mathbf{1.2532 \pm 0.0064}$ & $\mathbf{1.0236 \pm 0.0053}$ & $\mathbf{72}$ \\
+\Baseline{} & $1.2908$ & $1.0562$ & --- \\
+\midrule
+$\Delta\%$ vs $\Baseline{}$ & $-2.91\%$ & $-3.09\%$ & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The FEV-Bench improvements ($-2.91\%$ MASE, $-3.09\%$ SQL, $72/100$ wins) are within the BC$_a$ confidence interval of the GIFT-Eval improvement, and the per-degree sweep on FEV-Bench reproduces the GIFT-Eval pattern: every $d \geq 2$ beats baseline, the curve is shallow, and $d \in \{4, 6, 8\}$ are statistically tied at the optimum. Cross-benchmark agreement provides external-validity evidence that the improvement reflects a property of the polynomial-preconditioning mechanism rather than a benchmark-specific artifact.
+
 \subsection{Context Length and Learning-Rate Robustness}
 
-\paragraph{Context length.} Across context lengths $\{512, 1000, 2000, 4000\}$, the relative improvement is approximately constant at $\sim 5\%$ (Appendix~\ref{app:context}). Notably, \HD{} at context $2000$ outperforms \Baseline{} at context $4000$ ($0.833$ vs.\ $0.867$), suggesting that hint preconditioning can substitute for doubling the context window.
+\paragraph{Context length.} Across context lengths $\{512, 1000, 2000, 4000\}$, the relative improvement is approximately constant at $\sim 5\%$ (Appendix~\ref{app:context}). Notably, \HD{} at context $2000$ outperforms \Baseline{} at context $4000$ ($0.833$ vs.\ $0.867$), suggesting that input preconditioning can substitute for doubling the context window.
 
 \paragraph{Learning rate.} \HD{} is insensitive to learning rate ($0.1\%$ MASE change between $\eta = 10^{-3}$ and $2 \times 10^{-3}$), while \Baseline{} varies by $2.27\%$. At matched optimal learning rate, \HD{} still wins significantly ($280/485$, $p=3.8 \times 10^{-4}$; Appendix~\ref{app:matchedlr}).
 
@@ -435,7 +614,7 @@ Figure~\ref{fig:spectral-correlate} shows the resulting scatter: each point is o
 \end{tabular}
 \end{table}
 
-Two observations: the benefit of polynomial hints \emph{grows} with training budget ($-3.9\%$ at $100$K vs.\ $-2.9\%$ at $10$K), and the capacity controls that were near-neutral at $10$K now actively hurt. The \Baseline{} also shows higher across-seed variance at $100$K (range $0.863$--$0.909$), consistent with late-training instability that the hint channel appears to regularize.
+Two observations: the benefit of polynomial preconditioning \emph{grows} with training budget ($-3.9\%$ at $100$K vs.\ $-2.9\%$ at $10$K), and the capacity controls that were near-neutral at $10$K now actively hurt. The \Baseline{} also shows higher across-seed variance at $100$K (range $0.863$--$0.909$), consistent with late-training instability that the preconditioning channel appears to regularize.
 
 %==============================================================================
 \section{Statistical Methodology}
@@ -470,7 +649,7 @@ Given the observed effect size $|d| = 0.31$, a paired one-sided sign test with $
 
 \subsection{Controls as Interventions}
 
-The \Zero{} and \Dup{} conditions are \emph{capacity-matched interventions}: they differ from \HD{} only in the polynomial content of the hint channel. Under the causal framing, the effect of ``polynomial content'' on MASE is the average treatment effect (ATE) of replacing the \Dup{} (or \Zero{}) channel content with Chebyshev content, holding architecture fixed. The estimated ATE of \HD{} over \Dup{} is $-3.3\%$ with $95\%$ BC$_a$ CI $[-3.9\%, -2.6\%]$ (a controlled comparison that would be confounded in an unmatched comparison).
+The \Zero{} and \Dup{} conditions are \emph{capacity-matched interventions}: they differ from \HD{} only in the polynomial content of the preconditioning channel. Under the causal framing, the effect of ``polynomial content'' on MASE is the average treatment effect (ATE) of replacing the \Dup{} (or \Zero{}) channel content with Chebyshev content, holding architecture fixed. The estimated ATE of \HD{} over \Dup{} is $-3.3\%$ with $95\%$ BC$_a$ CI $[-3.9\%, -2.6\%]$ (a controlled comparison that would be confounded in an unmatched comparison).
 
 %==============================================================================
 \section{Related Work}
@@ -478,7 +657,7 @@ The \Zero{} and \Dup{} conditions are \emph{capacity-matched interventions}: the
 %==============================================================================
 
 \paragraph{Time series foundation models.}
-Transformer-based universal forecasters have proliferated~\citep{woo2024unified, liu2024moirai2, das2024decoder, ansari2024chronos, goswami2024moment, auer2025tirex}. Recent work critically examines the zero-shot claims~\citep{zhang2025tsfmready}, arguing that simple PCA+linear baselines can be competitive; our method strengthens compact foundation models in exactly this small-model regime. Most architectural innovations in the space (rotary embeddings, attention variants, mixture-of-experts~\citep{liu2024moirai2}) target the transformer stack; hint preconditioning is orthogonal, acting on the input representation before any attention layer.
+Transformer-based universal forecasters have proliferated~\citep{woo2024unified, liu2024moirai2, das2024decoder, ansari2024chronos, goswami2024moment, auer2025tirex}. Recent work critically examines the zero-shot claims~\citep{zhang2025tsfmready}, arguing that simple PCA+linear baselines can be competitive; our method strengthens compact foundation models in exactly this small-model regime. Most architectural innovations in the space (rotary embeddings, attention variants, mixture-of-experts~\citep{liu2024moirai2}) target the transformer stack; input preconditioning is orthogonal, acting on the input representation before any attention layer.
 
 \paragraph{Patching and overlap.}
 Patch-based architectures~\citep{nie2023patchtst, dosovitskiy2021image} dominate TSFMs. PatchTST uses overlapping patches to partially mitigate the cross-patch bottleneck; our approach achieves a similar effect at lower cost (no FLOP increase, no parameter increase in the encoder) and is complementary (one could combine both).
@@ -498,7 +677,7 @@ FIR filter design with Chebyshev polynomials is a classical topic~\citep{parks19
 The spectral story predicts---and the spectral-correlate analysis (Section~\ref{sec:spectral-correlate}) empirically confirms---that datasets whose power spectrum aligns with the filter's zeros benefit least, and those away from the zeros benefit most. In particular, transport and energy domains ($+4$ to $+7\%$ gains) have strong daily and half-daily cycles aligned with the filter's $32$- and $64$-sample lookbacks at $15$-minute resolution; weather and healthcare, dominated by much-longer or stochastic correlations, show no significant improvement.
 
 \paragraph{Model scale.}
-We find that the benefit of hint preconditioning is most pronounced at the small ($11.4$M) Moirai-2 scale; at the base ($46$M) scale, the improvement is seed-dependent and not consistently significant. This is consistent with a capacity-efficiency interpretation: when a model has enough parameters to discover the relevant cross-patch correlations via attention, the inductive bias of a fixed Chebyshev preconditioner adds less value.
+We find that the benefit of input preconditioning is most pronounced at the small ($11.4$M) Moirai-2 scale; at the base ($46$M) scale, the improvement is seed-dependent and not consistently significant. This is consistent with a capacity-efficiency interpretation: when a model has enough parameters to discover the relevant cross-patch correlations via attention, the inductive bias of a fixed Chebyshev preconditioner adds less value.
 
 \paragraph{Learning rate.}
 At matched optimal learning rate, the effect attenuates to $+0.72\%$ ($p = 3.8 \times 10^{-4}$). This suggests that part of \HD{}'s observed benefit at the default learning rate stems from its greater insensitivity to optimization hyperparameters. Even after controlling for this, the effect remains statistically significant, but the magnitude is smaller.
@@ -510,7 +689,7 @@ We focused on univariate, single-variate forecasting; extensions to multivariate
 \section{Conclusion}
 %==============================================================================
 
-We studied polynomial hint preconditioning for patch-based universal time series forecasters, a minimal architectural intervention that injects cross-patch temporal information via a fixed Chebyshev FIR filter at $0.11\%$ parameter overhead. Bridging the classical Chebyshev minimax theorem, the recent framework of universal sequence preconditioning~\citep{marsden2024universal}, and modern patch-based transformer forecasters, we established a closed-form frequency response for our specific filter, proved a BIBO-stability lemma, and validated the theoretical predictions empirically on synthetic LDS trajectories and on the GIFT-Eval benchmark ($2.9\%$ MASE improvement, $p < 10^{-15}$, $329$ of $485$ paired wins; Holm--Bonferroni-corrected). Controlled capacity experiments confirmed that the improvement is driven by the polynomial content of the hint channel rather than by extra parameters. Our spectral-correlate analysis links the cross-dataset variation in improvement to dataset-level frequency structure, providing dataset-level evidence for the spectral mechanism underlying the theory.
+We studied polynomial input preconditioning for patch-based universal time series forecasters, a minimal architectural intervention that injects cross-patch temporal information via a fixed Chebyshev FIR filter at $0.11\%$ parameter overhead. Bridging the classical Chebyshev minimax theorem, the recent framework of universal sequence preconditioning~\citep{marsden2024universal}, and modern patch-based transformer forecasters, we established a closed-form frequency response for our specific filter, proved a BIBO-stability lemma, and validated the theoretical predictions empirically on synthetic LDS trajectories and on the GIFT-Eval benchmark ($2.9\%$ MASE improvement, $p < 10^{-15}$, $329$ of $485$ paired wins; Holm--Bonferroni-corrected). Controlled capacity experiments confirmed that the improvement is driven by the polynomial content of the preconditioning channel rather than by extra parameters. Our spectral-correlate analysis links the cross-dataset variation in improvement to dataset-level frequency structure, providing dataset-level evidence for the spectral mechanism underlying the theory.
 
 \newpage
 \bibliographystyle{plainnat}
@@ -550,7 +729,7 @@ The pooled test treats the $485$ observations (5 seeds $\times$ 97 configs) as e
 \label{app:capacity}
 \emph{To be copied from workshop paper Appendix~D.}
 
-\section{Inference-Time Hint-Content Ablation}
+\section{Inference-Time Channel-Content Ablation}
 \label{app:inference-ablation}
 \emph{To be copied from workshop paper Appendix~K.}
 

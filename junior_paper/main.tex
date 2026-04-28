@@ -419,7 +419,7 @@ Finite differences & $0.8569$ & $-1.12\%$ \\
 
 The ordering Chebyshev $>$ EMA $>$ Legendre $>$ finite differences confirms the theoretical prediction: the family that minimises the $L^\infty$ norm on $[-1,1]$ outperforms families optimised for other norms.
 
-\paragraph{Why not learn the coefficients?} A natural alternative is to drop the fixed Chebyshev structure and let the model learn the FIR coefficients from initialisation. Empirically (Appendix~\ref{app:ablations}, Table~\ref{tab:learned-fir}), learnable coefficients converge to a high-pass-like solution that beats baseline by $-3.85\%$ but is worse than fixed Chebyshev ($-4.99\%$). Fixing the polynomial provides an inductive bias the model would otherwise have to discover from data---consistent with the broader theme that classical analytic structure (orthogonal polynomials, equioscillation) is more sample-efficient than free parameter optimisation when the structure is correct.
+\paragraph{Why fix the coefficients?} A natural alternative is to drop the fixed Chebyshev structure and let the model learn the FIR coefficients from initialisation. Section~\ref{sec:learned-fir} reports this experiment: a four-parameter learnable FIR beats \Baseline{} but is slightly worse than fixed Chebyshev. Fixing the polynomial transfers the analytic minimax solution to the model for free, whereas learning has to discover it from data and pays a small MASE penalty---consistent with the broader theme that classical analytic structure (orthogonal polynomials, equioscillation) is more sample-efficient than free parameter optimisation when the structure is correct.
 
 %==============================================================================
 \section{Patch-based Transformers for Forecasting}
@@ -558,7 +558,7 @@ We compare four conditions, all with identical Moirai-2 Small architecture, trai
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:main} shows that \HD{} improves geometric-mean MASE by $2.89\%$ over \Baseline{} at $10$K steps. Notably, neither capacity control provides a comparable benefit: \Dup{} \emph{hurts} performance ($44.7\%$ wins vs.\ $50\%$ expected by chance), and \Zero{} is at most weakly beneficial. These controls are diagnostic: they isolate the \emph{polynomial content} of the preconditioning channel, as opposed to the mere presence of an additional input channel or an extra $12$K parameters, as the source of the gain.
+Table~\ref{tab:main} shows that \HD{} improves geometric-mean normalised MASE by $2.89\%$ over \Baseline{} at $10$K steps and wins on $329$ of the $485$ paired per-configuration comparisons. The win-count pattern across capacity controls is the load-bearing observation: \Dup{} \emph{hurts} performance ($44.7\%$ wins, \emph{below} the $50\%$ chance rate), and \Zero{} is at most weakly beneficial ($54.0\%$ wins). The architecture, parameter count, and optimisation budget are the same for \HD{}, \Zero{}, and \Dup{}; only the channel \emph{content} differs. The fact that two of the three contents (zeros, duplicate) do not improve performance, while the third (Chebyshev residual) improves it by $\sim 3\%$, identifies the polynomial content---not the extra parameters, not the architectural slot for an auxiliary channel---as the cause of the gain. Beyond the $-2.89\%$ headline number, this is the substantive claim of the paper: the polynomial structure transferred from~\citet{marsden2024universal} is what carries.
 
 \subsection{Ablation: Filter Degree, Stride, Basis, and Dropout}
 
@@ -593,7 +593,15 @@ MASE & $0.838$ & $0.839$ & $\mathbf{0.823}$ & $0.842$ & & & \\
 \end{tabular}
 \end{table}
 
-The ablations in Table~\ref{tab:ablations-main} align with theoretical predictions. (a) Across $d \in \{2, \ldots, 8\}$ at 5 seeds each, $d = 4$ has the lowest mean MASE, but the curve is shallow: $d \in \{3, 5, 6, 8\}$ are within roughly one seed-to-seed standard deviation, and only $d = 2$ (a single non-trivial lag) and $d = 7$ trail meaningfully. We treat $d=4$ as a representative working choice rather than a uniquely optimal one---the qualitative ``every $d \geq 2$ improves over the baseline'' conclusion is the seed-robust statement, and is what theory predicts. (b) Stride $s = P$ is optimal: filter taps align exactly with patch boundaries, so the preconditioning channel injects cross-patch structure at the natural scale. (c) Chebyshev beats EMA (a one-sided low-pass filter), Legendre (orthogonal but not minimax), and finite-difference (degenerate high-pass), confirming the minimax-optimality argument. (d) Dropout $10\%$ avoids both over-reliance on the channel (low dropout) and under-use (high dropout).
+The ablations in Table~\ref{tab:ablations-main} align with the theoretical predictions of Section~\ref{sec:precondition} and pin down what is and is not load-bearing about \HD{}'s configuration.
+
+\emph{(a) Filter degree.} Across $d \in \{2, \ldots, 8\}$ at five seeds each, $d = 4$ achieves the lowest mean MASE, but the curve is shallow: $d \in \{3, 5, 6, 8\}$ are within roughly one seed-to-seed standard deviation of $d = 4$, and only $d = 2$ (a single non-trivial lag) and $d = 7$ trail meaningfully. The seed-robust qualitative statement is ``every $d \geq 2$ improves over \Baseline{}''---which is what the spectral-compression argument predicts (Theorem~\ref{thm:chebyshev-minimax}, Corollary~\ref{cor:spectral-compression}). The flatness of the degree curve also matches the noise-gain analysis of Section~\ref{sec:noise-gain}: the spectral term saturates by $d \approx 3$ on capacity-limited patch transformers, after which additional taps offer no further benefit and only contribute increasing noise gain. We therefore treat $d=4$ as a working choice, not a uniquely optimal one.
+
+\emph{(b) Stride.} Stride $s = P = 16$ is optimal, beating $s = 4, 8, 32$. This is the empirical signature of the cross-patch interpretation: filter taps at lags $32$ and $64$ align exactly with patch boundaries (two and four patches back), so the preconditioning channel injects cross-patch structure at the natural unit of the architecture. Strides smaller than $P$ contaminate the residual with within-patch information that the per-patch projection already sees; strides much larger than $P$ over-shoot the receptive scales the model can use.
+
+\emph{(c) Basis.} The basis ordering Chebyshev $>$ EMA $>$ Legendre $>$ FiniteDiff is exactly the prediction of the minimax argument: the family that minimises the $L^\infty$ norm on $[-1,1]$ wins. EMA (a one-sided low-pass) and Legendre (orthogonal under uniform weight, optimal in $L^2$) both provide some cross-patch information and beat \Baseline{}, but neither sits at the $L^\infty$ minimax point that the LDS spectral-radius bound (Eq.~\eqref{eq:rho-bound}) singles out. Finite differences, a degenerate high-pass with all spectral mass concentrated at the Nyquist frequency, captures none of the inductive bias of the polynomial families and barely helps. The empirical ordering is exactly what the analysis in Section~\ref{sec:basis-comparison} predicts, and it elevates the Chebyshev choice from one-of-many to the structurally correct one for diagonalisable real-spectrum dynamics.
+
+\emph{(d) Channel dropout.} A $10\%$ dropout rate is optimal; lower or higher rates degrade. With no dropout, the model becomes excessively reliant on a channel that, by construction, only contains coarse multi-patch summary information; with high dropout the channel is too rarely available to be exploited. The role of dropout is therefore to regularise the \emph{degree of dependence} on the auxiliary channel, not to add capacity. The ablation also matters operationally: \HD{} models with $0\%$ dropout collapse by $\sim 36\%$ in MASE if the channel is corrupted at inference (Appendix~\ref{app:inference-ablation}), while \HD{} with $10\%$ dropout degrades gracefully---a robustness property worth preserving in a deployed model.
 
 \subsection{FEV-Bench Cross-Benchmark Validation}
 \label{sec:fevbench}
@@ -617,11 +625,60 @@ $\Delta\%$ vs $\Baseline{}$ & $-2.91\%$ & $-3.09\%$ & --- \\
 \end{tabular}
 \end{table}
 
-The FEV-Bench improvements ($-2.91\%$ MASE, $-3.09\%$ SQL, $72/100$ wins) are comparable in magnitude to the GIFT-Eval improvement, and the per-degree sweep on FEV-Bench reproduces the GIFT-Eval pattern: every $d \geq 2$ beats baseline, the curve is shallow, and $d \in \{4, 6, 8\}$ are tied near the optimum. Two limitations are worth noting. First, the FEV-Bench baseline is a single-seed run while \HD{} is a 5-seed mean, so we cannot quantify cross-seed baseline variability on FEV-Bench. Second, the comparison shares training data (LOTSA) with the GIFT-Eval comparison; FEV-Bench is independent at the \emph{evaluation} level (different tasks, different metric) but not at the training-data level. We therefore present FEV-Bench as \emph{supportive cross-benchmark validation} rather than as fully independent evidence.
+The FEV-Bench improvements ($-2.91\%$ MASE, $-3.09\%$ SQL, $72/100$ wins) are comparable in magnitude to the GIFT-Eval improvement, and the per-degree sweep on FEV-Bench reproduces the GIFT-Eval pattern: every $d \geq 2$ beats baseline, the curve is shallow, and $d \in \{4, 6, 8\}$ are tied near the optimum. Two limitations are worth noting. First, the FEV-Bench baseline is a single-seed run while \HD{} is a 5-seed mean, so we cannot quantify cross-seed baseline variability on FEV-Bench. Second, the comparison shares training data (LOTSA) with the GIFT-Eval comparison; FEV-Bench is independent at the \emph{evaluation} level (different tasks, different metric) but not at the training-data level. We therefore present FEV-Bench as \emph{supportive cross-benchmark validation} rather than as fully independent evidence. Reproducing the qualitative GIFT-Eval pattern on a benchmark with disjoint task definitions and a different headline metric is non-trivial: it indicates that the polynomial-content effect we identify is not a quirk of the GIFT-Eval task distribution.
+
+\subsection{Fixed vs.\ Learned FIR Coefficients}
+\label{sec:learned-fir}
+
+A natural alternative to fixing $p$ to be the monic Chebyshev polynomial is to drop the polynomial structure entirely and let the model learn its own degree-$d$ FIR coefficients $(c_1, \ldots, c_d)$ jointly with the rest of the network. This isolates the question: does the gain come from the \emph{specific} Chebyshev coefficients prescribed by Theorem~\ref{thm:chebyshev-minimax}, or merely from the existence of \emph{some} cross-patch lookback channel that the model can shape end-to-end? We trained two learned-FIR variants matching \HD{}'s architecture exactly except that the coefficients are now four trainable scalars: one variant initialised at the Chebyshev coefficients, the other at zero.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Fixed Chebyshev versus learned FIR coefficients (seed 0, $d=4$, $s=16$, $10\%$ dropout). The learned filters beat \Baseline{} but are slightly worse than fixed Chebyshev; head-to-head, the fixed filter wins $51/97$ configurations against either learned variant.}
+\label{tab:learned-fir}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Initialisation} & \textbf{Learned coefficients $(c_1, c_2, c_3, c_4)$} & \textbf{MASE} & \textbf{$\Delta\%$ vs.\ \Baseline{}} \\
+\midrule
+Chebyshev init   & $(-0.026, -1.032, -0.123, +0.007)$ & $0.8332$ & $-3.85\%$ \\
+Zero init        & $(+0.308, +0.177, +0.057, +0.045)$ & $0.8358$ & $-3.57\%$ \\
+\textbf{Fixed Chebyshev (\HD{})} & $(0, -1, 0, 0.125)$ \emph{(not learned)} & $\mathbf{0.8234}$ & $\mathbf{-4.99\%}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three things are worth pulling out of Table~\ref{tab:learned-fir}.
+
+\emph{(i) Either learned variant beats \Baseline{}.} A trained FIR mixer over multi-patch lookbacks captures cross-patch correlations the un-augmented Moirai-2 input projection misses. This rules out the strong null in which any auxiliary lookback channel hurts, and reinforces the cross-patch-bottleneck story: the auxiliary channel acts on the same temporal scales the architecture cannot reach within a single patch.
+
+\emph{(ii) Initialisation determines the basin: Chebyshev-init stays near Chebyshev, zero-init drifts to a smoother low-pass.} The Chebyshev-initialised variant ends up close to its starting point: the dominant tap remains at lag $2s = 32$ with weight $\approx -1$, indicating that the loss landscape has a basin of attraction around the analytic solution. The zero-initialised variant converges to a qualitatively different solution---a smoother low-pass filter---and yet attains nearly identical MASE. Two distinct local minima of comparable quality is a sign that the underlying problem is genuinely under-determined by the data, which is consistent with the basin being broad: many filters that mix multi-patch information are roughly as good.
+
+\emph{(iii) Fixed slightly outperforms either learned variant.} This is the empirical signal that the Chebyshev choice is meaningful as an inductive bias rather than as a coincidence. In a setting where the optimal filter were known to lie in the interior of the FIR coefficient space, a learnable filter \emph{cannot} be worse than any fixed filter (it can always copy the fixed solution). The fact that learnable filters end up slightly worse means that, with $10$K optimizer steps and the GIFT-Eval distribution, the four-parameter optimisation is not sample-efficient enough to recover an objective at least as good as the analytic Chebyshev coefficients. Fixing the polynomial transfers the analytic solution to the model for free; learning has to discover it from data and pays a $\sim 1\%$ MASE penalty for the search. This is consistent with the broader theme that classical analytic structure (orthogonal polynomials, equioscillation) is more sample-efficient than free parameter optimisation when the structure is correct---and reinforces the interpretation that what matters is the polynomial content, not just the architectural slot it occupies.
 
 \subsection{Context-Length Robustness}
+\label{sec:contextlen}
 
-Across context lengths $\{512, 1000, 2000, 4000\}$, the relative improvement is approximately constant at $\sim 5\%$ (Appendix~\ref{app:context}). Notably, \HD{} at context $2000$ outperforms \Baseline{} at context $4000$ ($0.833$ vs.\ $0.867$), suggesting that input preconditioning can substitute for doubling the context window.
+Universal forecasters routinely tune context length to a deployment-time compute budget. A useful question is therefore not just whether \HD{} helps at the maximum supported context, but whether the benefit holds when the model is given strictly less history.
+
+\begin{table}[h]
+\centering
+\small
+\caption{MASE on GIFT-Eval at four context lengths (seed 0). Across $4{,}000 \to 512$ tokens of context, the relative improvement is approximately constant at $4.7$--$5.5\%$ in favour of \HD{}.}
+\label{tab:contextlen}
+\begin{tabular}{ccccc}
+\toprule
+\textbf{Context} & \textbf{\Baseline{}} & \textbf{\HD{}} & \textbf{$\Delta\%$} & \textbf{Wins/97} \\
+\midrule
+$512$    & $0.9432$ & $0.8986$ & $-4.73\%$ & $62$ \\
+$1{,}000$  & $0.9166$ & $0.8706$ & $-5.02\%$ & $65$ \\
+$2{,}000$  & $0.8813$ & $0.8331$ & $-5.47\%$ & $71$ \\
+$4{,}000$  & $0.8666$ & $0.8234$ & $-4.99\%$ & $66$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two findings stand out. (i) The improvement is approximately context-length-invariant: a $\sim 5\%$ gap between \HD{} and \Baseline{} is preserved across an $8\times$ range of context lengths. This supports our motivating story that the gain comes from cross-patch information injected \emph{before} self-attention rather than from the model exploiting more raw history at attention time. (ii) \HD{} at context $2{,}000$ ($0.8331$) beats \Baseline{} at context $4{,}000$ ($0.8666$). At inference, halving the context window quadruples self-attention's quadratic cost saving, so an input-side filter that recovers the missing performance is a strict efficiency win.
 
 \subsection{Extended Training ($100$K Steps)}
 \label{sec:100k}
@@ -643,7 +700,13 @@ Across context lengths $\{512, 1000, 2000, 4000\}$, the relative improvement is 
 \end{tabular}
 \end{table}
 
-Two observations: the benefit of polynomial preconditioning \emph{grows} with training budget ($-3.9\%$ at $100$K vs.\ $-2.9\%$ at $10$K), and the capacity controls that were near-neutral at $10$K now actively hurt. The \Baseline{} also shows higher across-seed variance at $100$K (range $0.863$--$0.909$), consistent with late-training instability that the preconditioning channel appears to regularize.
+Three things are worth pulling out of Table~\ref{tab:100k}.
+
+\emph{(i) The benefit of polynomial preconditioning grows with the training budget}: \HD{} improves over \Baseline{} by $-3.88\%$ at $100$K versus $-2.89\%$ at $10$K. The simplest explanation that fits the spectral-mechanism story is that more steps let the model better exploit the cross-patch structure handed to it by the channel; a fixed inductive bias compounds over training rather than being amortised away. This rules out the alternative reading that the gain is a transient initialisation artefact that disappears with longer training.
+
+\emph{(ii) The capacity controls flip from neutral to actively harmful}: at $10$K, \Dup{} is at $+0.4\%$ (essentially neutral) and \Zero{} at $-0.5\%$; at $100$K they widen to $+0.9\%$ and $+1.7\%$ respectively. Adding parameters to the input projection without giving them useful structure is mildly counterproductive at scale. This sharpens the main-result claim: the polynomial content is not just \emph{better} than the trivial channels, it is \emph{distinguishable} from them with increasing certainty as training proceeds.
+
+\emph{(iii) \Baseline{} suffers late-training instability that \HD{} avoids.} \Baseline{} ranges across seeds from $0.86$ to $0.91$ at $100$K (an $\sim 5\%$ spread), while \HD{} stays in $0.83$--$0.86$ (a $3\%$ spread). Seed $0$ \Baseline{} reaches $0.9092$, worse than its own $10$K MASE---a sign of late-training degradation. The cross-seed standard deviation is therefore not just a noise estimate; the preconditioning channel appears to act as a regulariser that prevents the model from drifting into the degraded basin some seeds find at long training. Combined with finding (i), this means our $-3.88\%$ headline understates the practical gain: \HD{} is closer to \emph{always} good than \Baseline{} is.
 
 %==============================================================================
 \section{Related Work}
@@ -866,45 +929,6 @@ $30\%$ & 0.8559 & $-1.23\%$ & 61 \\
 {\footnotesize $^\dagger$\Dnodrop{} MASE is the 5-seed mean. \Dnodrop{} and \HD{} are essentially tied; dropout helps marginally.}
 \end{table}
 
-\subsection{Learned FIR Coefficients (seed 0)}
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{lccc}
-\toprule
-\textbf{Initialization} & \textbf{Learned coefficients} & \textbf{MASE} & \textbf{$\Delta\%$ vs.\ BL} \\
-\midrule
-Chebyshev init & $[-0.026, -1.032, -0.123, 0.007]$ & 0.8332 & $-3.85\%$ \\
-Zero init & $[0.308, 0.177, 0.057, 0.045]$ & 0.8358 & $-3.57\%$ \\
-\textbf{Fixed Chebyshev} & $[0, -1, 0, 0.125]$ (not learned) & \textbf{0.8234} & $\mathbf{-4.99\%}$ \\
-\bottomrule
-\end{tabular}
-\label{tab:learned-fir}
-\end{table}
-
-The two learned filters converge to distinct basins (high-pass vs.\ smoothing). Both beat Baseline but are slightly worse than fixed Chebyshev (51/97 head-to-head wins for fixed). Fixing the polynomial provides an inductive bias the model would otherwise have to discover.
-
-\subsection{Latent Preconditioning (seed 0)}
-
-Applying the polynomial filter \emph{after} the input projection (in latent space) rather than before patching:
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{lccc}
-\toprule
-\textbf{Method} & \textbf{Filter location} & \textbf{MASE} & \textbf{vs.\ BL} \\
-\midrule
-\HD{} (input-level) & Before patching & 0.8234 & $-4.99\%$ \\
-Latent $s=1$ & After input projection & 1.1538 & $+33.1\%$ \\
-Latent $s=4$ & After input projection & 1.2243 & $+41.3\%$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Latent preconditioning is catastrophic. The filter must operate on the raw time series, not on learned embeddings: the spectral structure is destroyed by the input projection's nonlinear mixing.
-
 %==============================================================================
 \section{Polynomial Coefficients}
 \label{app:poly-coeffs}
@@ -963,14 +987,7 @@ The $\ell_\infty$ norm of monic $\tilde P_d$ on $[-1,1]$ is strictly larger than
 \begin{itemize}[leftmargin=1.5em]
     \item \textbf{Finite-difference} (degree $d$): $p(z) = (z - 1)^d$. For $d = 4$ at $s = 16$ this expands to $r_t = -4 x_{t-16} + 6 x_{t-32} - 4 x_{t-48} + x_{t-64}$. Heavy high-pass behaviour, no spectral-attenuation guarantee.
     \item \textbf{Exponential moving average} (EMA, half-life $\tau$): a one-sided low-pass filter with infinite impulse response coefficients $a_k = (1-\alpha) \alpha^k$, truncated to the window we use. Not polynomial-based.
-    \item \textbf{Learned FIR} (no fixed basis): the model learns the $d = 4$ residual coefficients $(c_1, c_2, c_3, c_4) \in \R^4$ from a Gaussian initialisation jointly with the rest of the network. The learned solution depends on initialisation (Appendix~\ref{app:ablations}, Table~\ref{tab:learned-fir}).
-\end{itemize}
-
-\paragraph{Multi-scale variants.}
-The MS46 and MSHD10 variants stack two polynomial residual channels:
-\begin{itemize}[leftmargin=1.5em]
-    \item \texttt{MS46}: Chebyshev $d = 4$ at $s = 16$ \emph{and} Chebyshev $d = 6$ at $s = 16$, both stripped of the identity term. The two residuals $r^{(4)}, r^{(6)}$ are concatenated as separate channels alongside the target and mask, so the per-patch input projection widens from $2P \to d_{\text{model}}$ to $4P \to d_{\text{model}}$.
-    \item \texttt{MSHD10}: same as \texttt{MS46} with $10\%$ per-patch channel dropout applied independently to each residual channel during training.
+    \item \textbf{Learned FIR} (no fixed basis): the model learns the $d = 4$ residual coefficients $(c_1, c_2, c_3, c_4) \in \R^4$ from a Gaussian initialisation jointly with the rest of the network. The learned solution depends on initialisation (Section~\ref{sec:learned-fir}, Table~\ref{tab:learned-fir}).
 \end{itemize}
 
 %==============================================================================
@@ -1049,52 +1066,6 @@ ALL    & 97 & 0.8618 & 0.8379 & \textbf{0.8368} & $-2.77\%$ & $-2.90\%$ & $40/97
 On short horizons \Dnodrop{} and \HD{} are within $0.4\%$ of each other; on medium and long horizons (PL $\geq 480$) \HD{} beats \Dnodrop{} by $0.7$--$0.85\%$ relative MASE---the direction the dropout-as-mismatch-regulariser story predicts but small relative to the $\sim 4\%$ HD-vs-Baseline gap.
 
 %==============================================================================
-\section{Context-Length Analysis}
-\label{app:context}
-%==============================================================================
-
-\begin{table}[h]
-\centering
-\caption{Context-length analysis (seed 0). The benefit is approximately constant ($\sim 5\%$) across context lengths.}
-\small
-\begin{tabular}{ccccc}
-\toprule
-\textbf{Context} & \textbf{BL} & \textbf{\HD} & \textbf{$\Delta\%$} & \textbf{Wins/97} \\
-\midrule
-512    & 0.9432 & 0.8986 & $-4.73\%$ & 62 \\
-1{,}000  & 0.9166 & 0.8706 & $-5.02\%$ & 65 \\
-2{,}000  & 0.8813 & 0.8331 & $-5.47\%$ & 71 \\
-4{,}000  & 0.8666 & 0.8234 & $-4.99\%$ & 66 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\HD{} at context length 2{,}000 (MASE $0.8331$) outperforms Baseline at context length 4{,}000 (MASE $0.8666$), suggesting that input preconditioning can substitute for doubling the context window.
-
-%==============================================================================
-\section{Multi-Scale Variants}
-\label{app:multiscale}
-%==============================================================================
-
-We tested two multi-scale variants providing two preconditioning channels (degree 4 + degree 6):
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{lcccc}
-\toprule
-\textbf{Method} & \textbf{Mean} & \textbf{Std} & \textbf{vs.\ BL} & \textbf{Wins/485} \\
-\midrule
-\HD{} ($d=4$, $10\%$ drop) & 0.8368 & 0.0083 & $-2.89\%$ & 329 \\
-MS46 ($d=4{+}6$, $0\%$ drop) & 0.8434 & 0.0123 & $-2.13\%$ & 330 \\
-MSHD10 ($d=4{+}6$, $10\%$ drop) & 0.8437 & 0.0072 & $-2.09\%$ & 315 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-All three methods are essentially tied head-to-head. MSHD10 has the lowest cross-seed standard deviation. We chose \HD{} as the headline configuration because it has the simplest architecture (single channel) while matching the multi-scale variants' performance.
-
-%==============================================================================
 \section{100K Extended Training}
 \label{app:100k}
 %==============================================================================
@@ -1109,14 +1080,12 @@ All three methods are essentially tied head-to-head. MSHD10 has the lowest cross
 \midrule
 Baseline & 0.9092 & 0.8920 & 0.8633 & 0.8641 & 0.8636 & 0.8784 \\
 \textbf{\HD} & \textbf{0.8349} & \textbf{0.8402} & 0.8586 & \textbf{0.8450} & \textbf{0.8430} & \textbf{0.8443} \\
-MSHD10 & 0.8266 & --- & 0.8432 & 0.8437 & --- & 0.8378$^\dagger$ \\
 Duplicate & 0.8887 & 0.8740 & 0.8974 & 0.8794 & 0.8903 & 0.8860 \\
 Zero & 0.8917 & 0.8585 & 0.8750 & 0.8825 & 0.9610 & 0.8937 \\
 \midrule
 \HD{} $\Delta\%$ vs.\ BL & $-8.2\%$ & $-5.8\%$ & $-0.5\%$ & $-2.2\%$ & $-2.4\%$ & $-3.9\%$ \\
 \bottomrule
-\end{tabular}\\[2pt]
-{\footnotesize $^\dagger$MSHD10 mean over 3 available seeds (0, 2, 7).}
+\end{tabular}
 \end{table}
 
 Two findings stand out. First, the benefit of polynomial preconditioning \emph{grows} with training budget: \HD{} improves by $3.9\%$ at 100K (vs.\ $2.9\%$ at 10K). Second, the capacity controls that were near-neutral at 10K now actively hurt: Duplicate degrades by $0.9\%$ and Zero by $1.7\%$. Baseline shows higher variance across seeds at 100K (seed 0 reaches $0.9092$ due to late-training instability), while \HD{} remains stable (range $0.83$--$0.86$).

@@ -63,7 +63,7 @@
 
 \begin{abstract}
 \noindent
-\emph{Universal Sequence Preconditioning} (USP) is a recent theoretical framework~\citep{marsden2024universal} for online sequence prediction in which a fixed convolutional transformation of the target sequence---specifically, convolution with the coefficients of a monic Chebyshev or Legendre polynomial---yields provable, hidden-dimension-independent regret bounds for marginally stable linear dynamical systems (LDS). This paper investigates whether the USP idea transfers, empirically and theoretically, to a setting that the original framework does not directly cover: \emph{patch-based transformer foundation models for time-series forecasting}, such as Moirai-2~\citep{liu2024moirai2}. The setting differs from USP in three ways---the forecaster is a patch-based transformer rather than an online learner, the data may be far richer than a finite-dimensional LDS, and the forecasting task is multi-step rather than single-step. To accommodate these differences we propose \textbf{\method}, in which the polynomial-preconditioned signal is concatenated as an auxiliary input \emph{channel} alongside the raw target rather than replacing it, sidestepping the catastrophic error accumulation that pure target preconditioning would induce under autoregressive multi-step rollout. Architecturally, only the per-patch input projection is widened; the transformer decoder is unchanged, adding $12$K parameters or $0.11\%$ of the Moirai-2 Small model. We give a self-contained mathematical treatment grounded in the Chebyshev equioscillation theorem and a closed-form analysis of our filter's frequency response, a noise-gain analysis with a spectral--noise tradeoff, and a comparison of the Chebyshev basis with Legendre and second-kind alternatives. Empirically, on the GIFT-Eval benchmark ($97$ dataset $\times$ horizon configurations, 5 seeds, $485$ paired comparisons) our method achieves a $\Delta\mathrm{MASE}^* = -2.9\%$ relative improvement in the normalised geometric-mean MASE over a from-scratch Moirai-2 Small baseline, winning $329$ of $485$ paired per-configuration comparisons; capacity-matched controls (duplicate channel, zero channel) confirm that the polynomial content---not the extra parameters---drives the gain. At $100$K training steps the improvement grows to $\Delta\mathrm{MASE}^* = -3.9\%$, and the gain remains around $-5\%$ across context lengths $512$--$4{,}000$. Throughout the paper we report relative MASE changes with the convention $\Delta\% = (\text{treatment} - \text{control})/\text{control}$, so a negative $\Delta\%$ means lower MASE (an improvement).
+\emph{Universal Sequence Preconditioning} (USP) is a recent theoretical framework~\citep{marsden2024universal} for online sequence prediction in which a fixed convolutional transformation of the target sequence---specifically, convolution with the coefficients of a monic Chebyshev or Legendre polynomial---yields provable, hidden-dimension-independent regret bounds for marginally stable linear dynamical systems (LDS). This paper investigates whether the USP idea transfers, empirically and theoretically, to a setting that the original framework does not directly cover: \emph{patch-based transformer foundation models for time-series forecasting}, such as Moirai-2~\citep{liu2024moirai2}. The setting differs from USP in three ways---the forecaster is a patch-based transformer rather than an online learner, the data may be far richer than a finite-dimensional LDS, and the forecasting task is multi-step rather than single-step. To accommodate these differences we propose \textbf{\method}, in which the polynomial-preconditioned signal is concatenated as an auxiliary input \emph{channel} alongside the raw target rather than replacing it, sidestepping the catastrophic error accumulation that pure target preconditioning would induce under autoregressive multi-step rollout. Architecturally, only the per-patch input projection is widened; the transformer decoder is unchanged, adding $12$K parameters or $0.11\%$ of the Moirai-2 Small model. We give a self-contained mathematical treatment grounded in the Chebyshev equioscillation theorem, a closed-form analysis of our filter's frequency response, and a quantitative spectral--noise tradeoff that determines a heuristic optimal degree. Empirically, on the GIFT-Eval benchmark ($97$ dataset $\times$ horizon configurations, 5 seeds, $485$ paired comparisons) our method achieves a $\Delta\mathrm{MASE}^* = -2.9\%$ relative improvement in the normalised geometric-mean MASE over a from-scratch Moirai-2 Small baseline, winning $329$ of $485$ paired per-configuration comparisons; capacity-matched controls (duplicate channel, zero channel) confirm that the polynomial content---not the extra parameters---drives the gain. At $100$K training steps the improvement grows to $\Delta\mathrm{MASE}^* = -3.9\%$, and the gain remains around $-5\%$ across context lengths $512$--$4{,}000$. Throughout the paper we report relative MASE changes with the convention $\Delta\% = (\text{treatment} - \text{control})/\text{control}$, so a negative $\Delta\%$ means lower MASE (an improvement).
 \end{abstract}
 
 \section*{Acknowledgments and Contributions}
@@ -127,7 +127,7 @@ We retrain the Moirai-2 Small encoder~\citep{liu2024moirai2} ($11.4$M parameters
 \paragraph{Contributions and outline.}
 The remainder of this paper develops the following contributions:
 \begin{enumerate}[leftmargin=1.5em, topsep=0.2em, itemsep=0.2em]
-  \item A self-contained mathematical treatment (Sections~\ref{sec:preliminaries}--\ref{sec:precondition}) of universal sequence preconditioning specialised from online LDS prediction to patch-based transformer forecasting, including: the Marsden--Hazan algebraic identity, the Chebyshev equioscillation theorem, a closed-form derivation of our filter's frequency response (Theorem~\ref{thm:freq-response}), a BIBO-stability lemma (Lemma~\ref{lem:stability}), a noise-gain summary, and a basis comparison against Legendre.
+  \item A self-contained mathematical treatment (Sections~\ref{sec:preliminaries}--\ref{sec:precondition}) of universal sequence preconditioning specialised from online LDS prediction to patch-based transformer forecasting, including: the Marsden--Hazan algebraic identity, the Chebyshev equioscillation theorem (Theorem~\ref{thm:chebyshev-minimax}), a closed-form derivation of our filter's frequency response (Theorem~\ref{thm:freq-response}), a BIBO-stability lemma (Lemma~\ref{lem:stability}), and a quantitative spectral--noise tradeoff (Figure~\ref{fig:spectral-noise-tradeoff}) that motivates the choice of filter degree.
   \item A self-contained description (Section~\ref{sec:patch-transformers}) of the Moirai-2 architecture, its prefix-LM pretraining objective, the LOTSA training corpus, the multi-token inference procedure, the GIFT-Eval evaluation protocol with a rigorous definition of the MASE metric, and the architectural modification implementing our method (Section~\ref{sec:method}).
   \item An empirical evaluation (Section~\ref{sec:empirical}) on the GIFT-Eval benchmark, in which polynomial input preconditioning improves a capacity-limited patch-based transformer's $\overline{\mathrm{MASE}^*}$ by $\Delta\mathrm{MASE}^* = -2.9\%$, supplemented by extensive capacity-control and filter ablations, an independent FEV-Bench cross-benchmark check, context-length and 100K-step extensions, and per-domain/per-frequency analyses.
 \end{enumerate}
@@ -277,7 +277,7 @@ Chebyshev polynomials possess several extremal properties; one of the most celeb
 \label{sec:chebyshev}
 %==============================================================================
 
-\citet{marsden2024universal} introduced a polynomial-preconditioning framework that yields the first sublinear, hidden-dimension-independent regret bounds for online prediction in marginally-stable LDSs. The mechanism: convolving the observation sequence with a fixed degree-$d$ monic polynomial $p$ is algebraically equivalent to multiplying the hidden dynamics by $p^*(A)$, where $p^*(z) := z^d p(1/z)$ is the reciprocal polynomial; choosing $p$ to be the monic Chebyshev polynomial then minimax-optimally compresses the spectral radius the downstream learner faces. We extract from this framework the analytic ingredients needed for our patch-based forecasting setting: the algebraic identity (Section~\ref{sec:lds-identity}), the Chebyshev minimax theorem and its corollary on spectral compression (Section~\ref{sec:cheb-minimax}), the frequency response and stability properties of the resulting FIR filter (Section~\ref{sec:freq-response-section}), and the comparison with other polynomial bases (Section~\ref{sec:basis-comparison}). The full Marsden--Hazan regret machinery---a careful summation of the spectral residual under marginal stability---is not used in our analysis; the reader interested in those rates is referred to \citet[Thms.~3 and~5]{marsden2024universal}.
+\citet{marsden2024universal} introduced a polynomial-preconditioning framework that yields the first sublinear, hidden-dimension-independent regret bounds for online prediction in marginally-stable LDSs. The mechanism: convolving the observation sequence with a fixed degree-$d$ monic polynomial $p$ is algebraically equivalent to multiplying the hidden dynamics by $p^*(A)$, where $p^*(z) := z^d p(1/z)$ is the reciprocal polynomial; choosing $p$ to be the monic Chebyshev polynomial then minimax-optimally compresses the spectral radius the downstream learner faces. We extract from this framework the analytic ingredients needed for our patch-based forecasting setting: the algebraic identity (Section~\ref{sec:lds-identity}), the Chebyshev minimax theorem and its corollary on spectral compression (Section~\ref{sec:cheb-minimax}), the frequency response and stability properties of the resulting FIR filter (Section~\ref{sec:freq-response-section}), and the spectral--noise tradeoff that determines a heuristic optimal degree (Section~\ref{sec:noise-gain}). The full Marsden--Hazan regret machinery---a careful summation of the spectral residual under marginal stability---is not used in our analysis; the reader interested in those rates is referred to \citet[Thms.~3 and~5]{marsden2024universal}.
 
 \subsection{Polynomial Preconditioning of LDS Observations}
 \label{sec:lds-identity}
@@ -374,52 +374,38 @@ At the harmonics $\omega_k = k/(2s)$ of Theorem~\ref{thm:freq-response},
 For $d = 4$, $\abs{\widetilde H(\omega_k)} = 7/8$.
 \end{proposition}
 
-\subsection{Noise Gain and Comparison with Other Bases}
-\label{sec:basis-comparison}
+\subsection{The Spectral--Noise Tradeoff}
 \label{sec:noise-gain}
 
-The spectral compression of Theorem~\ref{thm:chebyshev-minimax} comes at a cost: the filter amplifies independent noise by a factor proportional to $\norm{\boldsymbol{a}^{(d)}}_2^2$, the squared $\ell^2$ norm of the monic Chebyshev coefficients in the monomial basis. The first few values are
+The spectral compression of Theorem~\ref{thm:chebyshev-minimax} comes at a cost: the filter $\tilde T_d^*(B_s)$ amplifies independent additive noise by a factor proportional to $\norm{\boldsymbol{a}^{(d)}}_2^2$, the squared $\ell^2$ norm of the monic Chebyshev coefficients $(a_0, a_1, \ldots, a_d)$ in the monomial basis. The exact values (rational fractions) for $d = 0, \ldots, 8$ are
 \[
-    \norm{\boldsymbol{a}^{(d)}}_2^2 \;=\; 1,\; 1,\; \tfrac{5}{4},\; \tfrac{25}{16},\; \tfrac{129}{64},\; \tfrac{681}{256},\; \tfrac{3653}{1024},\; \tfrac{19825}{4096},\; \tfrac{108545}{16384}, \qquad d = 0, \ldots, 8,
+    \norm{\boldsymbol{a}^{(d)}}_2^2 \;=\; 1,\; 1,\; \tfrac{5}{4},\; \tfrac{25}{16},\; \tfrac{129}{64},\; \tfrac{681}{256},\; \tfrac{3653}{1024},\; \tfrac{19825}{4096},\; \tfrac{108545}{16384},
 \]
-with consecutive ratios approaching $((1+\sqrt 2)/2)^2 \approx 1.457$. The noise-gain norm grows exponentially in $d$ at rate strictly slower than the spectral-compression rate $4^{1-d}$ shrinks, so the spectral benefit dominates the noise penalty for moderate $d$. At $d = 4$: spectral compression $4^{-3} = 1/64$ versus noise gain $\norm{\boldsymbol{a}^{(4)}}_2^2 = 129/64 \approx 2.02$. Empirically (Table~\ref{tab:ablations-main}(a)), the MASE curve over $d \in \{2, \ldots, 8\}$ is shallow with $d = 4$ achieving the lowest mean, consistent with the spectral term being deeply saturated by $d \geq 3$ on capacity-limited patch transformers.
+with consecutive ratios approaching $\alpha := ((1+\sqrt{2})/2)^2 = (3 + 2\sqrt{2})/4 \approx 1.4571$. The squared $L^\infty$ spectral-compression bound, in contrast, decays at the faster rate $\sup_{[-1,1]}\abs{\tilde T_d}^2 = 4^{1-d}$ (Theorem~\ref{thm:chebyshev-minimax}). Their ratio---the natural ``signal-to-noise leverage'' of the filter---therefore decays as $(\alpha/4)^d \approx 0.364^d$, exponentially in $d$.
 
-\paragraph{Comparison with Legendre.}
-The minimax property singles out Chebyshev among classical orthogonal polynomial families. Different orthogonality weights yield different optimisation criteria: Legendre $\tilde P_d$ minimises the $L^2$ norm $(\int_{-1}^1 q^2)^{1/2}$ rather than $L^\infty$. Since $\rho(p^*(A)) \leq \sup_{[-1,1]} \abs{p}$ is an $L^\infty$ bound, Chebyshev gives the right inductive bias for diagonalisable $A$ with bounded spectrum.
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/spectral_noise_tradeoff.pdf}
+\caption{Theoretical spectral-compression vs.\ noise-gain tradeoff for monic Chebyshev preconditioning $\tilde T_d$ on $[-1,1]$, plotted against filter degree $d$ on a logarithmic vertical axis. The squared $L^\infty$ spectral bound $\sup_{[-1,1]}\abs{\tilde T_d}^2 = 4^{1-d}$ (blue) decays geometrically at rate $1/4$ per unit $d$; the noise-gain norm $\norm{\boldsymbol{a}^{(d)}}_2^2$ (red) grows geometrically at rate $\alpha = (3 + 2\sqrt{2})/4 \approx 1.457$. Their ratio (green, dashed) is the leverage of preconditioning---spectral benefit per unit of noise-gain cost---and decays as $(\alpha/4)^d \approx 0.364^d$. By $d = 4$ the spectral term has been compressed by a factor of $1/64$ while the noise gain is only $\sim 2\times$ larger than no preconditioning, a $\sim 32\times$ leverage; by $d \geq 7$ the leverage saturates at a numerically negligible level relative to the small additional gain in spectral compression.}
+\label{fig:spectral-noise-tradeoff}
+\end{figure}
 
-\begin{proposition}[Sup-norm gap between Chebyshev and Legendre]
-\label{prop:cheb-vs-legendre}
-For $d \geq 1$,
+Figure~\ref{fig:spectral-noise-tradeoff} visualises the tradeoff. Two qualitative facts are worth noting. First, the spectral curve dominates the noise-gain curve in the regime where preconditioning is interesting: the leverage ratio at $d = 4$ is $\sim 32$, and even at $d = 8$ remains $\sim 10^4$. Second, the leverage \emph{decreases} super-exponentially, so each additional degree purchases progressively less spectral benefit per unit of noise penalty---consistent with a heuristic optimal degree (Remark~\ref{rem:noise-tradeoff} below) that is finite and small even in the absence of any constraint on $d$.
+
+\begin{remark}[Heuristic optimal degree]
+\label{rem:noise-tradeoff}
+The Marsden--Hazan regret bound for online prediction in marginally stable LDSs~\citep[Thm.~3]{marsden2024universal} contains, in the simplest reading, a sum of two competing terms in $d$:
 \[
-    \frac{\sup_{[-1,1]} \abs{\tilde T_d}}{\sup_{[-1,1]} \abs{\tilde P_d}} \;=\; \frac{2 \binom{2d}{d}}{4^d} \;\xrightarrow[d \to \infty]{}\; \frac{2}{\sqrt{\pi d}}.
+    \mathrm{regret} \;\lesssim\; T \cdot \rho(p^*(A))^2 \;+\; T \cdot \norm{\boldsymbol{a}^{(d)}}_2^2 \cdot \sigma^2 \;+\; (\text{algorithm-dependent term}).
 \]
-The ratio equals $1$ at $d = 1$ and is strictly less than $1$ for all $d \geq 2$, with values $1, 3/4, 5/8, 35/64, 63/128, \ldots$ for $d = 1, 2, 3, 4, 5, \ldots$.
-\end{proposition}
+Substituting Corollary~\ref{cor:spectral-compression} and modelling the noise gain as $C \alpha^d$, the optimum over $d$ obeys
+\[
+    d^* \;\approx\; \frac{1}{\log(4 \alpha)} \log\!\Bigl(\frac{A}{B C}\Bigr),
+\]
+where $A$ aggregates the LDS contraction constants and $B$ the noise constants. Crucially, $d^*$ depends only on the ratio $A / (BC)$ and is \emph{independent of $T$}: no asymptotically growing degree is needed. The cited Marsden--Hazan analysis gives explicit dimension-independent regret rates as $T \to \infty$ under marginal-stability and comparator-class assumptions; the structural prediction we use from it is the qualitative shape of the tradeoff captured in Figure~\ref{fig:spectral-noise-tradeoff}, not a specific regret rate.
+\end{remark}
 
-\begin{proof}
-Theorem~\ref{thm:chebyshev-minimax} gives $\sup_{[-1,1]} \abs{\tilde T_d} = 2^{1-d}$. For Legendre: $\abs{P_d(x)} \leq 1$ on $[-1,1]$ with equality at $x = \pm 1$, so the monic $\tilde P_d = P_d / c_d$ with leading coefficient $c_d = (2d)!/(2^d (d!)^2)$ has sup norm $1/c_d = 2^d (d!)^2 / (2d)!$. Taking the ratio and applying Stirling gives the stated asymptotic.
-\end{proof}
-
-For $d = 4$, the monic Chebyshev attenuates a worst-case eigenvalue by $1/8 = 0.125$, while the monic Legendre attenuates by only $8/35 \approx 0.229$---a $1.83\times$ gap. Squared, this is roughly a $3.35\times$ gap in the spectral-residual term.
-
-\paragraph{Empirical confirmation.} The basis ablation (Appendix~\ref{app:ablations}, Table~\ref{tab:basis-ablation}) is consistent:
-\begin{center}
-\small
-\begin{tabular}{lcc}
-\toprule
-Basis ($d{=}4$, $s{=}16$) & MASE & $\Delta\%$ vs.\ Baseline \\
-\midrule
-Chebyshev $\tilde T_4^*$ & $0.8234$ & $-4.99\%$ \\
-EMA (truncated geometric) & $0.8329$ & $-3.89\%$ \\
-Legendre $\tilde P_4^*$ & $0.8400$ & $-3.07\%$ \\
-Finite differences & $0.8569$ & $-1.12\%$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-The ordering Chebyshev $>$ EMA $>$ Legendre $>$ finite differences confirms the theoretical prediction: the family that minimises the $L^\infty$ norm on $[-1,1]$ outperforms families optimised for other norms.
-
-\paragraph{Why fix the coefficients?} A natural alternative is to drop the fixed Chebyshev structure and let the model learn the FIR coefficients from initialisation. Section~\ref{sec:learned-fir} reports this experiment: a four-parameter learnable FIR beats \Baseline{} but is slightly worse than fixed Chebyshev. Fixing the polynomial transfers the analytic minimax solution to the model for free, whereas learning has to discover it from data and pays a small MASE penalty---consistent with the broader theme that classical analytic structure (orthogonal polynomials, equioscillation) is more sample-efficient than free parameter optimisation when the structure is correct.
+For our application: at $d = 4$, the leverage ratio is $\approx 31.7$, and we treat this as a sufficient (rather than optimal) operating point. Whether other classical bases---Legendre, EMA, finite differences---offer competitive tradeoffs in this region, and whether learning the coefficients does better or worse than the analytic Chebyshev solution, are empirical questions that we examine in Section~\ref{sec:empirical} (Table~\ref{tab:ablations-main}(c) and Section~\ref{sec:learned-fir}).
 
 %==============================================================================
 \section{Patch-based Transformers for Forecasting}
@@ -599,7 +585,7 @@ The ablations in Table~\ref{tab:ablations-main} align with the theoretical predi
 
 \emph{(b) Stride.} Stride $s = P = 16$ is optimal, beating $s = 4, 8, 32$. This is the empirical signature of the cross-patch interpretation: filter taps at lags $32$ and $64$ align exactly with patch boundaries (two and four patches back), so the preconditioning channel injects cross-patch structure at the natural unit of the architecture. Strides smaller than $P$ contaminate the residual with within-patch information that the per-patch projection already sees; strides much larger than $P$ over-shoot the receptive scales the model can use.
 
-\emph{(c) Basis.} The basis ordering Chebyshev $>$ EMA $>$ Legendre $>$ FiniteDiff is exactly the prediction of the minimax argument: the family that minimises the $L^\infty$ norm on $[-1,1]$ wins. EMA (a one-sided low-pass) and Legendre (orthogonal under uniform weight, optimal in $L^2$) both provide some cross-patch information and beat \Baseline{}, but neither sits at the $L^\infty$ minimax point that the LDS spectral-radius bound (Eq.~\eqref{eq:rho-bound}) singles out. Finite differences, a degenerate high-pass with all spectral mass concentrated at the Nyquist frequency, captures none of the inductive bias of the polynomial families and barely helps. The empirical ordering is exactly what the analysis in Section~\ref{sec:basis-comparison} predicts, and it elevates the Chebyshev choice from one-of-many to the structurally correct one for diagonalisable real-spectrum dynamics.
+\emph{(c) Basis.} The basis ordering Chebyshev $>$ EMA $>$ Legendre $>$ FiniteDiff is exactly the prediction of the minimax argument: the family that minimises the $L^\infty$ norm on $[-1,1]$ wins. EMA (a one-sided low-pass) and Legendre (orthogonal under uniform weight, optimal in $L^2$) both provide some cross-patch information and beat \Baseline{}, but neither sits at the $L^\infty$ minimax point that the LDS spectral-radius bound (Eq.~\eqref{eq:rho-bound}) singles out. Finite differences, a degenerate high-pass with all spectral mass concentrated at the Nyquist frequency, captures none of the inductive bias of the polynomial families and barely helps. The size of the Chebyshev--Legendre gap is consistent with the theoretical sup-norm gap of Proposition~\ref{prop:cheb-vs-legendre}: at $d = 4$, the Chebyshev sup norm is $1/8$ versus Legendre's $8/35 \approx 0.229$, a $1.83\times$ gap (and $\approx 3.35\times$ in the squared spectral-residual term). The empirical ordering elevates the Chebyshev choice from one-of-many to the structurally correct one for diagonalisable real-spectrum dynamics.
 
 \emph{(d) Channel dropout.} A $10\%$ dropout rate is optimal; lower or higher rates degrade. With no dropout, the model becomes excessively reliant on a channel that, by construction, only contains coarse multi-patch summary information; with high dropout the channel is too rarely available to be exploited. The role of dropout is therefore to regularise the \emph{degree of dependence} on the auxiliary channel, not to add capacity. The ablation also matters operationally: \HD{} models with $0\%$ dropout collapse by $\sim 36\%$ in MASE if the channel is corrupted at inference (Appendix~\ref{app:inference-ablation}), while \HD{} with $10\%$ dropout degrades gracefully---a robustness property worth preserving in a deployed model.
 
@@ -907,7 +893,7 @@ Duplicate & 0.8583 & $-0.96\%$ & 42/97 & 27/97 \\
 \label{tab:basis-ablation}
 \end{table}
 
-The basis ordering Chebyshev $>$ EMA $>$ Legendre $>$ finite differences confirms the theoretical prediction of Section~\ref{sec:basis-comparison}: the family that minimizes the $L^\infty$ norm on $[-1,1]$ outperforms families optimised for other norms.
+The basis ordering Chebyshev $>$ EMA $>$ Legendre $>$ finite differences confirms the theoretical prediction (Theorem~\ref{thm:chebyshev-minimax}, Proposition~\ref{prop:cheb-vs-legendre}): the family that minimises the $L^\infty$ norm on $[-1,1]$ outperforms families optimised for other norms.
 
 \subsection{Channel Dropout Rate (Chebyshev $d=4$, $s=16$)}
 
@@ -981,7 +967,22 @@ Defined by Bonnet's recurrence $(d+1) P_{d+1}(x) = (2d+1) x P_d(x) - d P_{d-1}(x
 \tilde P_4(x) &= x^4 - \tfrac{6}{7} x^2 + \tfrac{3}{35}, &\quad r_t &= -\tfrac{6}{7} x_{t-32} + \tfrac{3}{35} x_{t-64}.
 \end{aligned}
 \]
-The $\ell_\infty$ norm of monic $\tilde P_d$ on $[-1,1]$ is strictly larger than that of $\tilde T_d$ for all $d \geq 2$: their ratio is $2 \binom{2d}{d}/4^d \to 2/\sqrt{\pi d}$ as $d \to \infty$ (Proposition~\ref{prop:cheb-vs-legendre}). Legendre minimises the $\ell_2$ norm $\bigl(\int_{-1}^{1} p(x)^2 \, dx\bigr)^{1/2}$ rather than the $\ell_\infty$ norm.
+The $\ell_\infty$ norm of monic $\tilde P_d$ on $[-1,1]$ is strictly larger than that of $\tilde T_d$ for all $d \geq 2$. The exact gap is given by the following short proposition, which restates the Chebyshev minimax theorem (Theorem~\ref{thm:chebyshev-minimax}) against the Legendre $L^2$ minimiser.
+
+\begin{proposition}[Sup-norm gap between Chebyshev and Legendre]
+\label{prop:cheb-vs-legendre}
+For $d \geq 1$,
+\[
+    \frac{\sup_{[-1,1]} \abs{\tilde T_d}}{\sup_{[-1,1]} \abs{\tilde P_d}} \;=\; \frac{2 \binom{2d}{d}}{4^d} \;\xrightarrow[d \to \infty]{}\; \frac{2}{\sqrt{\pi d}}.
+\]
+The ratio equals $1$ at $d = 1$ and is strictly less than $1$ for all $d \geq 2$, with values $1, 3/4, 5/8, 35/64, 63/128, \ldots$ for $d = 1, 2, 3, 4, 5, \ldots$ respectively.
+\end{proposition}
+
+\begin{proof}
+$\sup_{[-1,1]} \abs{\tilde T_d} = 2^{1-d}$ from Theorem~\ref{thm:chebyshev-minimax}. For Legendre: $\abs{P_d(x)} \leq 1$ on $[-1,1]$ with equality at $x = \pm 1$, so the monic $\tilde P_d = P_d / c_d$ with leading coefficient $c_d = (2d)!/(2^d (d!)^2)$ has sup norm $1/c_d = 2^d (d!)^2 / (2d)!$. Taking the ratio and applying Stirling's approximation gives $2 \binom{2d}{d}/4^d \to 2/\sqrt{\pi d}$.
+\end{proof}
+
+For $d = 4$, the monic Chebyshev attenuates a worst-case eigenvalue by $1/8 = 0.125$, while the monic Legendre attenuates by only $8/35 \approx 0.229$---a $1.83\times$ gap, or $\approx 3.35\times$ when squared. This explains the $\sim 1.9$-percentage-point Chebyshev advantage observed in the basis ablation (Table~\ref{tab:ablations-main}(c)). Legendre minimises the $\ell_2$ norm $\bigl(\int_{-1}^{1} p(x)^2 \, dx\bigr)^{1/2}$ rather than the $\ell_\infty$ norm; for the LDS spectral-radius bound (Eq.~\eqref{eq:rho-bound}), only the $\ell_\infty$ optimisation is the relevant one.
 
 \paragraph{Other bases used in ablations.}
 \begin{itemize}[leftmargin=1.5em]

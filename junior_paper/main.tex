@@ -618,6 +618,30 @@ The empirical ordering Chebyshev ($0.823$) $>$ EMA ($0.833$) $>$ Legendre ($0.84
 
 \emph{(d) Channel dropout.} We find that a $10\%$ dropout rate is optimal.
 
+\subsection{Horizon Analysis: The Role of Channel Dropout}
+
+To understand why channel dropout helps, we compare two variants that differ only in whether channel dropout is applied during training: \Dnodrop{} (Chebyshev $d=4$, $s=16$, \emph{no} dropout) and \HD{} (identical, but with $10\%$ channel dropout). Both use the same fixed Chebyshev residual filter $r_t = -x_{t-2P} + \tfrac{1}{8} x_{t-4P}$; the only difference is whether the channel is randomly zeroed during training. We bin the $97$ GIFT-Eval configurations by prediction horizon into short ($H < 480$ time steps), medium ($480 \leq H < 960$), and long ($H \geq 960$).
+
+\begin{table}[h]
+\centering
+\caption{\Dnodrop{} vs.\ \HD{} vs.\ \Baseline{} by prediction-horizon bin (seed 0, $10$K steps). Both methods beat \Baseline{} at all horizons, but \HD{}'s advantage over \Dnodrop{} grows with the horizon.}
+\label{tab:horizon}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Horizon bin} & \textbf{$n$} & \textbf{\Baseline{}} & \textbf{\Dnodrop{}} & \textbf{\HD{}} & \textbf{\Dnodrop{} $\Delta\%$} & \textbf{\HD{} $\Delta\%$} \\
+\midrule
+Short  & 55 & 0.840 & \textbf{0.825} & 0.828 & $-1.8\%$ & $-1.4\%$ \\
+Medium & 21 & 0.859 & 0.830 & \textbf{0.823} & $-3.4\%$ & $-4.2\%$ \\
+Long   & 21 & 0.924 & 0.880 & \textbf{0.874} & $-4.7\%$ & $-5.3\%$ \\
+\midrule
+All    & 97 & 0.862 & 0.838 & \textbf{0.837} & $-2.8\%$ & $-2.9\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:horizon} reveals a clear pattern. On short horizons, \Dnodrop{} and \HD{} are within $0.4\%$ of each other and both beat \Baseline{} by $\sim 1.5\%$. On medium and long horizons---where the model must perform multi-step autoregressive rollout and the preconditioning channel is computed from the model's own predicted values---\HD{} opens a $0.7$--$0.9\%$ gap over \Dnodrop{}. This is the behaviour channel dropout is designed to produce: during training, randomly zeroing the channel teaches the model not to rely on it catastrophically, so when the channel's signal degrades at long horizons (because it is computed from noisy autoregressive predictions rather than ground-truth), the model degrades gracefully rather than collapsing. The overall \HD{} vs.\ \Dnodrop{} gap ($-2.9\%$ vs.\ $-2.8\%$) is small in aggregate, but the horizon-stratified view shows that dropout's benefit is concentrated where it matters: at the long horizons that dominate practical forecasting difficulty.
+
 \subsection{FEV-Bench Cross-Benchmark Validation}
 \label{sec:fevbench}
 

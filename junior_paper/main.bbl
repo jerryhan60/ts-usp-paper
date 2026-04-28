@@ -5,6 +5,14 @@
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
 
+\bibitem[Aksu et~al.(2024)Aksu, Woo, Liu, Liu, Liu, Savarese, Xiong, and
+  Sahoo]{vijay2024gifteval}
+Taha Aksu, Gerald Woo, Juncheng Liu, Xu~Liu, Chenghao Liu, Silvio Savarese,
+  Caiming Xiong, and Doyen Sahoo.
+\newblock {GIFT-Eval}: A benchmark for general time series forecasting model
+  evaluation.
+\newblock \emph{arXiv preprint arXiv:2410.10393}, 2024.
+
 \bibitem[Ansari et~al.(2024)Ansari, Stella, Turkmen, Zhang, Mercado, Shen,
   Shchur, Rangapuram, Arango, Kapoor, et~al.]{ansari2024chronos}
 Abdul~Fatir Ansari, Lorenzo Stella, Caner Turkmen, Xiyuan Zhang, Pedro Mercado,
@@ -13,18 +21,10 @@ Abdul~Fatir Ansari, Lorenzo Stella, Caner Turkmen, Xiyuan Zhang, Pedro Mercado,
 \newblock Chronos: Learning the language of time series.
 \newblock In \emph{ICML}, 2024.
 
-\bibitem[Das et~al.(2024{\natexlab{a}})Das, Kong, Leber, Mathews, and
-  Sen]{das2024timesfm}
-Abhimanyu Das, Weihao Kong, Andrew Leber, Rajat Mathews, and Raghuram Sen.
-\newblock A decoder-only foundation model for time-series forecasting.
-\newblock In \emph{International Conference on Machine Learning (ICML)},
-  2024{\natexlab{a}}.
-
-\bibitem[Das et~al.(2024{\natexlab{b}})Das, Kong, Leber, Mathews, and
-  Sen]{das2024decoder}
+\bibitem[Das et~al.(2024)Das, Kong, Leber, Mathews, and Sen]{das2024decoder}
 Abhimanyu Das, Weihao Kong, Andrew Leber, Rajat Mathews, and Ruhan Sen.
 \newblock A decoder-only foundation model for time-series forecasting.
-\newblock In \emph{ICML}, 2024{\natexlab{b}}.
+\newblock In \emph{ICML}, 2024.
 
 \bibitem[Davis(1975)]{davis1975interpolation}
 Philip~J. Davis.
@@ -51,21 +51,22 @@ Roger Koenker and Gilbert Bassett.
 \newblock Regression quantiles.
 \newblock \emph{Econometrica}, 46\penalty0 (1):\penalty0 33--50, 1978.
 
-\bibitem[Liu et~al.(2024)Liu, Woo, Kumar, and Sahoo]{liu2024moirai2}
-Chenghao Liu, Gerald Woo, Akshat Kumar, and Doyen Sahoo.
-\newblock Moirai-moe: Empowering time series foundation models with sparse
-  mixture of experts.
-\newblock \emph{arXiv preprint arXiv:2410.10469}, 2024.
+\bibitem[Liu et~al.(2025)Liu, Aksu, Liu, Liu, Yan, Pham, Savarese, Sahoo,
+  Xiong, and Li]{liu2024moirai2}
+Chenghao Liu, Taha Aksu, Juncheng Liu, Xu~Liu, Hanshu Yan, Quang Pham, Silvio
+  Savarese, Doyen Sahoo, Caiming Xiong, and Junnan Li.
+\newblock Moirai 2.0: When less is more for time series forecasting.
+\newblock \emph{arXiv preprint arXiv:2511.11698}, 2025.
 
 \bibitem[Loshchilov and Hutter(2019)]{loshchilov2019adamw}
 Ilya Loshchilov and Frank Hutter.
 \newblock Decoupled weight decay regularization.
 \newblock In \emph{ICLR}, 2019.
 
-\bibitem[Marsden and Hazan(2024)]{marsden2024universal}
+\bibitem[Marsden and Hazan(2025)]{marsden2024universal}
 Annie Marsden and Elad Hazan.
 \newblock Universal sequence preconditioning.
-\newblock \emph{arXiv preprint arXiv:2406.09368}, 2024.
+\newblock \emph{arXiv preprint arXiv:2502.06545}, 2025.
 
 \bibitem[Mason and Handscomb(2003)]{mason2003chebyshev}
 John~C. Mason and David~C. Handscomb.
@@ -84,16 +85,17 @@ Noam Shazeer.
 \newblock Glu variants improve transformer.
 \newblock \emph{arXiv preprint arXiv:2002.05202}, 2020.
 
+\bibitem[Shchur et~al.(2025)Shchur, Ansari, Turkmen, Stella, Erickson, Guerron,
+  Bohlke-Schneider, and Wang]{shchur2025fevbench}
+Oleksandr Shchur, Abdul~Fatir Ansari, Caner Turkmen, Lorenzo Stella, Nick
+  Erickson, Pablo Guerron, Michael Bohlke-Schneider, and Yuyang Wang.
+\newblock fev-bench: A realistic benchmark for time series forecasting.
+\newblock \emph{arXiv preprint arXiv:2509.26468}, 2025.
+
 \bibitem[Su et~al.(2024)Su, Ahmed, Lu, Pan, Bo, and Liu]{su2024rope}
 Jianlin Su, Murtadha Ahmed, Yu~Lu, Shengfeng Pan, Wen Bo, and Yunfeng Liu.
 \newblock Roformer: Enhanced transformer with rotary position embedding.
 \newblock \emph{Neurocomputing}, 568, 2024.
-
-\bibitem[Vijay et~al.(2024)Vijay, Abid, Ansari, et~al.]{vijay2024gifteval}
-Taha Vijay, Kashif Abid, Abdul~Fatir Ansari, et~al.
-\newblock {GIFT-Eval}: A benchmark for general time series forecasting model
-  evaluation.
-\newblock \emph{arXiv preprint arXiv:2410.10393}, 2024.
 
 \bibitem[Woo et~al.(2024)Woo, Liu, Kumar, Xiong, Savarese, and
   Sahoo]{woo2024unified}

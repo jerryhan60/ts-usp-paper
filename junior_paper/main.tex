@@ -497,7 +497,7 @@ We now describe the architectural modification that delivers the preconditioning
     \mathbf{e}_i = \mathrm{ResBlock}_{3P \to d_{\text{model}}}\bigl([\mathbf{p}_i; \mathbf{m}_i; \mathbf{r}_i]\bigr) \in \R^{d_{\text{model}}},
     \label{eq:method-projection}
 \end{equation}
-where $\mathrm{ResBlock}$ consists of a widened linear layer followed by a SiLU nonlinearity, a second linear layer, and a residual connection. Only the first linear layer widens; the transformer stack, attention layers, output heads, and normalisation layers are unchanged.
+where $\mathrm{ResBlock}$ consists of a widened linear layer followed by a SiLU nonlinearity, a second linear layer, and a residual connection. Only the first linear layer widens; the transformer decoder, attention layers, output heads, and normalisation layers are unchanged.
 
 \paragraph{Channel dropout.}
 During training, each patch's preconditioning channel is independently zeroed with probability $p_{\text{drop}} = 0.1$; at inference the full preconditioning signal is always supplied. The primary motivation of channel dropout is to improve long horizon inference where we might have noisy preconditioning signals that are generated from the model's own autoregressive rollouts. Dropout increases the robustness of the model to missing or noisy preconditioning signals and therefore prevents catastrophic dependence or error accumulation. 
@@ -524,7 +524,7 @@ For Moirai-2 Small ($P = 16$, $d_{\text{model}} = 384$), widening the first line
     \ENDIF
     \STATE $\mathbf{e}_i \leftarrow \mathrm{ResBlock}_{3P \to d_{\mathrm{model}}}([\mathbf{p}_i;\, \mathbf{m}_i;\, \mathbf{r}_i])$
 \ENDFOR
-\STATE Feed $\mathbf{e}_{1:T/P}$ to the (unmodified) transformer stack.
+\STATE Feed $\mathbf{e}_{1:T/P}$ to the (unmodified) transformer decoder.
 \end{algorithmic}
 \end{algorithm}
 
@@ -820,7 +820,7 @@ The Chebyshev polynomial $T_d(z)$ is expanded in the monomial basis to obtain FI
 \]
 computed over the full (normalized, zero-mean unit-variance) time series before patching. Unobserved time steps are masked to zero. During training with channel dropout $p$, each patch's preconditioning channel independently has probability $p$ of being replaced with zeros. At inference, the full preconditioning channel is always provided.
 
-The preconditioning channel is concatenated with the target and mask channels before the input projection. The input projection is the only architectural change relative to Baseline; all downstream layers (transformer stack, output projection) are identical.
+The preconditioning channel is concatenated with the target and mask channels before the input projection. The input projection is the only architectural change relative to Baseline; all downstream layers (transformer decoder, output projection) are identical.
 
 %==============================================================================
 \section{Capacity Controls}

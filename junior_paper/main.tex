@@ -129,6 +129,18 @@ Consider the noiseless input-output LDS $x_{t+1} = A x_t + B u_t$, $y_t = C x_t$
 \end{equation}
 \end{lemma}
 
+\begin{proof}
+Unrolling the state dynamics gives the exact predictor $y_t = C A^t x_0 + \sum_{i=1}^{t} C A^{i-1} B u_{t-i}$. The truncated predictor uses only the first $h$ terms of the input-driven sum: $\hat y_t^{(h)} = \sum_{i=1}^{h} C A^{i-1} B u_{t-i}$. Their difference splits as
+\[
+    y_t - \hat y_t^{(h)} \;=\; C A^t x_0 \;+\; \sum_{i=h+1}^{t} C A^{i-1} B u_{t-i}.
+\]
+For the tail of the input-driven response, the triangle inequality and the stability assumption give
+\[
+    \Bigl\lVert \sum_{i=h+1}^{t} C A^{i-1} B u_{t-i} \Bigr\rVert \;\leq\; \sum_{i=h+1}^{\infty} \gamma M \rho^{i-1} \beta U \;=\; \frac{M \beta \gamma U}{1 - \rho}\, \rho^h.
+\]
+Summing the initial-state term over $t = 1, \ldots, T$ and the tail bound over $T$ rounds gives the result.
+\end{proof}
+
 Thus, after the initial transient, a stable system can be approximated to error $\varepsilon$ using memory $h = O(\log(T/\varepsilon)/(1 - \rho))$ when $\rho$ is close to one. However, note that the required memory can grow poorly as the stability margin $1 - \rho$ shrinks.
 
 When $\rho(A) = 1$ (marginally stable, e.g., pure sinusoids), this geometric truncation no longer gives a finite-memory approximation with rapidly vanishing tail; classical regret bounds degrade, with the dependence on $d_x$ often becoming linear or worse.
@@ -171,6 +183,19 @@ Consider the noiseless LDS $x_{t+1} = A x_t + B u_t$, $y_t = C x_t$, where $A \i
 \end{equation}
 Concretely, one may take $M_{1, i} = -a_i I_{d_y}$ and $M_{2, j} = C\bigl(\sum_{i=0}^{j-1} a_i A^{j-1-i}\bigr) B$ (with $a_0 = 1$).
 \end{theorem}
+
+\begin{proof}
+Write $d = d_x$. Unrolling the state dynamics for $d$ steps gives
+\begin{equation}
+    x_t \;=\; A^d x_{t-d} + \sum_{j=1}^{d} A^{j-1} B u_{t-j}.
+    \label{eq:ch-unroll}
+\end{equation}
+For each $i = 1, \ldots, d$, similarly $x_{t-i} = A^{d-i} x_{t-d} + \sum_{j=i+1}^{d} A^{j-i-1} B u_{t-j}$, and therefore $A^{d-i} x_{t-d} = x_{t-i} - \sum_{j=i+1}^{d} A^{j-i-1} B u_{t-j}$. By the Cayley--Hamilton theorem, $A^d + a_1 A^{d-1} + \cdots + a_d I = 0$, so $A^d = -\sum_{i=1}^{d} a_i A^{d-i}$. Substituting into~\eqref{eq:ch-unroll} and using the identities for $A^{d-i} x_{t-d}$:
+\[
+    x_t \;=\; -\sum_{i=1}^{d} a_i x_{t-i} + \sum_{j=1}^{d} \Bigl(\sum_{i=0}^{j-1} a_i A^{j-1-i}\Bigr) B u_{t-j}.
+\]
+Multiplying both sides by $C$ gives $y_t = -\sum_{i=1}^{d} a_i\, y_{t-i} + \sum_{j=1}^{d} C\bigl(\sum_{i=0}^{j-1} a_i A^{j-1-i}\bigr) B\, u_{t-j}$, which is the claimed recurrence with $M_{1,i} = -a_i I_{d_y}$ and $M_{2,j} = C\bigl(\sum_{i=0}^{j-1} a_i A^{j-1-i}\bigr) B$.
+\end{proof}
 
 Theorem~\ref{thm:cayley-hamilton} shows that linear predictors are not just a heuristic, and in the noiseless setting they can exactly represent finite-dimensional LDS, with autoregressive coefficients given precisely by the coefficients of $A$'s characteristic polynomial. The drawback is that the memory length depends on the hidden dimension $d_x$. Lemma~\ref{lem:stable-truncation} removes this dependence for strictly stable systems, but replaces it with dependence on the stability margin $1 - \rho$. Spectral filtering addresses precisely this bottleneck.
 
@@ -334,7 +359,7 @@ Let $\{u_t\}_{t=1}^T \subset \R^{d_{\mathrm{in}}}$ with $\norm{u_t}_2 \leq 1$, a
 \end{theorem}
 
 \begin{proof}[Proof outline]
-The bound is the sum of two terms. The first is the online-gradient-descent (OGD) regret $\frac{3}{2} G D \sqrt{T}$ of \citet[Thm.~3.1]{hazan2025onlinecontrol} applied to the loss sequence $\ell_t(Q) = \norm{\hat y_t(Q) - y_t}_1$ over the convex set $\mathcal{K}$. The diameter is $D \leq 2 C_{\mathrm{domain}} n \norm{\boldsymbol{c}}_1$ (each $\norm{Q_j} \leq C_{\mathrm{domain}} n \norm{\boldsymbol{c}}_1$ by the constraint set) and the gradient bound is $G \leq n \sqrt{d_{\mathrm{out}}}$ (since $\norm{\nabla_{Q_i} \ell_t}_F \leq \sqrt{d_{\mathrm{out}}} \norm{u_{t-i}}_2 \leq \sqrt{d_{\mathrm{out}}}$). The second term bounds the comparator's loss. Setting $\hat Q_s = \sum_{i=0}^{s} c_i C A^{s-i} B$ makes $\hat Q \in \mathcal{K}$ (since $C_{\mathrm{domain}} \geq \norm{C}\norm{B}\kappa$), and the prediction error at $\hat Q$ reduces to the $\aleph_2$ tail: $\norm{\hat y_t(\hat Q) - y_t}_1 \leq \norm{C}\norm{B}\kappa \cdot \max_\lambda \abs{p_n^c(\lambda)} \cdot T$. Summing over $T$ rounds gives the $T^2$ term.
+The bound is the sum of two terms. The first is the online-gradient-descent (OGD) regret $\frac{3}{2} G D \sqrt{T}$ of \citet[Thm.~6.1]{hazan2025onlinecontrol} applied to the loss sequence $\ell_t(Q) = \norm{\hat y_t(Q) - y_t}_1$ over the convex set $\mathcal{K}$. The diameter is $D \leq 2 C_{\mathrm{domain}} n \norm{\boldsymbol{c}}_1$ (each $\norm{Q_j} \leq C_{\mathrm{domain}} n \norm{\boldsymbol{c}}_1$ by the constraint set) and the gradient bound is $G \leq n \sqrt{d_{\mathrm{out}}}$ (since $\norm{\nabla_{Q_i} \ell_t}_F \leq \sqrt{d_{\mathrm{out}}} \norm{u_{t-i}}_2 \leq \sqrt{d_{\mathrm{out}}}$). The second term bounds the comparator's loss. Setting $\hat Q_s = \sum_{i=0}^{s} c_i C A^{s-i} B$ makes $\hat Q \in \mathcal{K}$ (since $C_{\mathrm{domain}} \geq \norm{C}\norm{B}\kappa$), and the prediction error at $\hat Q$ reduces to the $\aleph_2$ tail: $\norm{\hat y_t(\hat Q) - y_t}_1 \leq \norm{C}\norm{B}\kappa \cdot \max_\lambda \abs{p_n^c(\lambda)} \cdot T$. Summing over $T$ rounds gives the $T^2$ term.
 \end{proof}
 
 % The two terms in~\eqref{eq:usp-regret-general} exhibits a tradeoff: $\norm{\boldsymbol{c}}_1$ (which controls the OGD regret) competes with $\max_\lambda \abs{p_n^c(\lambda)}$ (which controls the comparator error). 

@@ -13,12 +13,12 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 
-\icmltitlerunning{Polynomial Hint Preconditioning}
+\icmltitlerunning{Polynomial Input Preconditioning}
 
 \begin{document}
 
 \twocolumn[
-  \icmltitle{Polynomial Hint Preconditioning for\\Universal Time Series Forecasting}
+  \icmltitle{Polynomial Input Preconditioning for\\Universal Time Series Forecasting}
 
   \icmlsetsymbol{equal}{*}
 
@@ -37,43 +37,45 @@
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-The framework of \emph{universal sequence preconditioning}~\citep{marsden2024universal} establishes that applying a monic Chebyshev polynomial transformation to the target sequence of an online linear-dynamical-system predictor yields sublinear, hidden-dimension-independent regret bounds---the first such guarantees that hold for marginally stable, asymmetric transition matrices. This paper investigates whether the same spectral inductive bias transfers empirically to pretrained \emph{patch-based transformer} time-series forecasters, which embed each fixed-length patch independently and must otherwise rely on attention to recover multi-patch temporal structure. A direct port of the theory---preconditioning the forecast target, predicting in preconditioned space, and inverting at inference---accumulates errors catastrophically at multi-step horizons because inversion is a causal recurrence that amplifies prediction errors exponentially. We therefore propose \textbf{polynomial hint preconditioning}: \emph{concatenate} the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged, structurally ruling out inversion-induced error accumulation. Only the per-patch input projection widens ($12$K extra parameters, $0.11\%$ overhead); the transformer encoder is unchanged. On GIFT-Eval ($97$ configurations, $5$ seeds) our method improves geometric-mean MASE by $2.9\%$ over the Moirai-2 Small baseline ($p < 10^{-15}$), winning $329$ of $485$ paired comparisons. Capacity-matched controls confirm the polynomial content drives the gain---duplicate channel \emph{hurts} ($44.7\%$ wins), zero channel is neutral. At $100$K training steps the benefit grows to $3.9\%$.
+Universal Sequence Preconditioning (USP) is a recent theoretical framework for sequence prediction that proposes applying a fixed convolutional transformation to the target sequence, leading to provable guarantees for online prediction algorithms on data arising from marginally stable and asymmetric linear dynamical systems. This paper investigates whether these techniques transfer empirically to pretrained zero-shot \emph{patch-based transformer} time-series forecasters such as Moirai-2, which has achieved strong results across a diverse set of domains. We propose \textbf{polynomial input preconditioning}, where we \emph{concatenate} the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. Architecturally, we only widen the per-patch input projection ($12$K extra parameters, $0.11\%$ overhead) while leaving the transformer decoder unchanged. On GIFT-Eval ($97$ configurations, $5$ seeds) our method improves geometric-mean MASE by $2.9\%$ over the Moirai-2 Small baseline (cross-seed std $0.008$), beating the baseline on every seed and winning $72$ of $97$ per-config means when pretrained on 10K training steps. Capacity-matched controls confirm the polynomial content drives the gain. When concatenating a duplicate or zero channel, there is no performance improvement. At $100$K training steps the benefit grows to $3.9\%$.
 \end{abstract}
 
 %==============================================================================
 \section{Introduction}
 %==============================================================================
 
-\paragraph{Universal sequence preconditioning.} \citet{marsden2024universal} recently established a striking spectral-compression guarantee for online prediction of linear dynamical systems (LDSs). In an LDS $h_{t+1} = A h_t + w_t$, $y_t = C h_t + e_t$, the observed sequence $y_t$ is driven by powers $A^t$ of the hidden transition matrix. Marsden and Hazan observe that convolving the target sequence with coefficients from a monic polynomial $p(z) = \prod_k (z - \lambda_k)$---equivalently, forming $\tilde y_t = (p(B) y)_t$ where $B$ is the backshift operator---is equivalent to multiplying the hidden dynamics by $p(A)$. Choosing $p$ to be the monic Chebyshev polynomial $\tilde T_d$ of degree $d$ exploits its classical equioscillation property: no degree-$d$ monic polynomial has smaller $\ell_\infty$ norm than $2^{1-d}$ on $[-1,1]$, so $\rho(p(A)) \leq \rho(A)^d \cdot 2^{1-d}$ when $A$'s real spectrum lies in $[-\rho(A), \rho(A)]$. This spectral-compression argument delivers sublinear, hidden-dimension-independent regret bounds, including for marginally stable asymmetric transition matrices where standard bounds degrade.
+\paragraph{Universal sequence preconditioning.} \citet{marsden2024universal} recently established provable guarantees for online prediction algorithms on data arising from marginally stable and asymmetric linear dynamical systems.For a linear dynamical systems (LDS) with hidden state dynamics $x_{t+1} = Ax_t + Bu_t$ , Marsden and Hazan observe that convolving the target sequence with coefficients from a monic polynomial $p(z)$ is equivalent to multiplying the hidden dynamics by $p(A)$. Choosing $p$ to be the monic Chebyshev polynomial $\tilde T_d$ of degree $d$ exploits its classical equioscillation property: no degree-$d$ monic polynomial has smaller $\ell_\infty$ norm than $2^{1-d}$ on $[-1,1]$, so $\rho(p(A)) \leq \rho(A)^d \cdot 2^{1-d}$ when $A$'s real spectrum lies in $[-\rho(A), \rho(A)]$. Combining this technique with online convex regression delivers sublinear, hidden-dimension-independent regret bounds for learning marginally stable asymmetric transition matrices. Empirically, on synthetic linear, nonlinear, and deep-RNN-generated sequences and on the ETTh1 benchmark, USP with fixed Chebyshev or Legendre coefficients reduces prediction error.
 
-\paragraph{Does this transfer to universal time-series forecasting?} The setting of pretrained foundation models~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} differs from an idealized LDS in three important ways: (i)~the forecaster is a \emph{patch-based transformer}, not an online linear learner; (ii)~the data-generating process is far richer than a finite-dimensional LDS; (iii)~the task is multi-step-ahead forecasting, not single-step online. Yet the spectral intuition should still apply. Patch-based architectures \citep{nie2023patchtst,dosovitskiy2021image} split the input into non-overlapping length-$P$ windows and embed each patch independently, creating a \emph{cross-patch information bottleneck}: before the first self-attention layer, each patch embedding encodes only $P$ time steps, so multi-patch correlations (e.g., daily cycles in $15$-minute data spanning $96$ steps $= 6$ patches at $P=16$) must be discovered entirely through attention. Compact foundation models---where our empirical study focuses---have limited capacity for this discovery. A polynomial preconditioner that mixes information across the same multi-patch scales \emph{before} patching is exactly the inductive bias the architecture would benefit from.
+\paragraph{Does this transfer to universal time-series forecasting?} The setting of pretrained foundation models~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} differs from the theoretical framework of USP in three important ways: (i)~the forecaster is a \emph{patch-based transformer}, not an online learner; (ii)~the data-generating process may be far richer than a finite-dimensional LDS; (iii)~the task is multi-step-ahead forecasting, not single-step online. 
 
-\paragraph{Why not simply precondition the target?} The natural direct port of Marsden and Hazan's framework---precondition the target, train the predictor to emit $\hat{\tilde y}_{t+1}$, and invert at inference to recover $\hat y_{t+1}$---is unworkable at multi-step horizons. The inversion is a causal recurrence
+\paragraph{Our approach} One natural approach might be to precondition the target, train the predictor to emit $\hat{\tilde y}_{t+1}$, and invert at inference to recover $\hat y_{t+1}$. However, this fails at multi-step horizons because the inversion is a causal recurrence
 \[
-\hat y_t \;=\; \Big(\hat{\tilde y}_t \;-\; \sum_{k=1}^{d} c_k\, \hat y_{t-k}\Big) \Big/ c_0,
+\hat y_t \;=\; \hat{\tilde y}_t \;-\; \sum_{k=1}^{d} c_k\, \hat y_{t-k}
 \]
-whose solution amplifies prediction errors: an error at step $t$ feeds back into predictions at step $t+1, t+2, \ldots$, and for autoregressive rollout across the tens-to-hundreds of steps typical of forecasting benchmarks, the accumulated variance dominates the signal. We therefore leave the forecast target unchanged and use a \emph{hint channel} instead: compute the preconditioned signal $h[t]$ and concatenate it as an auxiliary input alongside the raw target and the observation mask. Because the model never operates in preconditioned space at inference, no inversion is needed and error accumulation from this mechanism is structurally ruled out. Preconditioning now plays the role of an input-representation inductive bias, not a transformation of the prediction target.
 
-\paragraph{Method overview and preview of findings.} Concretely, we set the filter to the reciprocal monic Chebyshev polynomial of degree $d=4$ at stride $s = P$:
-\begin{equation}
-h[t] \;=\; \sum_{k=0}^{d} a_k\, x[t - k s], \qquad s = P,
-\label{eq:hint}
-\end{equation}
-with $a_0 = 1$ and remaining coefficients derived from $\tilde T_d$. For $d=4$ and $P=16$ the filter reduces to $h[t] = x[t] - x[t-32] + \tfrac{1}{8}\, x[t-64]$, injecting information from two and four patches back into each current-patch embedding. Only the per-patch input projection widens, adding $12$K parameters (0.11\% of Moirai-2 Small). On GIFT-Eval (5 seeds) we observe a $2.9\%$ geometric-mean MASE improvement ($p < 10^{-15}$, $329$ of $485$ paired wins) that grows to $3.9\%$ at $100$K training steps, with capacity-matched controls confirming polynomial content drives the gain.
+Therefore, for an autoregressive rollout we might encounter catastrophic error accumulation. Instead we propose leaving the forecast target unchanged and use a \emph{preconditioning channel}, where we compute the preconditioned signal $h[t]$ and concatenate it as an auxiliary input alongside the raw target and the observation mask. Because the model never operates in preconditioned space at inference, no inversion is needed and we avoid error accumulation. 
+
+Another motivation for this approach is because patch-based architectures \citep{nie2023patchtst,dosovitskiy2021image} split the input into non-overlapping length-$P$ windows and embed each patch independently, creating a \emph{cross-patch information bottleneck}: before the first self-attention layer, each patch embedding encodes only $P$ time steps, so multi-patch correlations must be discovered entirely through attention. A polynomial preconditioner that mixes information across the same multi-patch scales \emph{before} patching might be helpful. 
 
 %==============================================================================
 \section{Method}
 %==============================================================================
+\paragraph{Preconditioning filter.} We apply a degree-$d$ monic polynomial in the lag operator $B$ at stride $s$ to the normalized series $x$ and define the preconditioned input as the residual against the identity:
+\begin{equation}
+\tilde h[t] \;=\; \sum_{k=1}^{d} c_k\, x[t - k s],
+\label{eq:precond}
+\end{equation}
+where $\{c_k\}_{k=1}^{d}$ are the non-leading coefficients of the chosen monic polynomial $p(B^s) = B^{ds} + \sum_{k=1}^{d} c_k B^{(d-k)s}$ (after stripping the identity term $x[t]$). Our default is the monic Chebyshev polynomial of the first kind, $\tilde T_d$, with $d=4$ and $s = P$ (one patch). For $P=16$ the coefficients are $(c_1,\dots,c_4) = (0,-1,0,\tfrac{1}{8})$, so $\tilde h[t] = -x[t-32] + \tfrac{1}{8}\, x[t-64]$.
 
-\paragraph{Hint channel.} Given the normalized time series $x$, we compute the hint residual $\tilde{h}[t] = T_d(B^s)x[t] - x[t]$ and partition it into patches aligned with the original patching. The input to the projection becomes $3P$-dimensional: $\mathbf{e}_i = \text{ResBlock}_{3P \to d}([\mathbf{p}_i; \mathbf{m}_i; \tilde{\mathbf{h}}_i])$, where $\mathbf{p}_i$ is the data patch, $\mathbf{m}_i$ the observation mask, and $\tilde{\mathbf{h}}_i$ the hint patch. Only the first linear layer widens; the transformer encoder is unchanged.
+\paragraph{Preconditioning channel.} The preconditioned signal $\tilde h$ is partitioned into patches $\tilde{\mathbf h}_i$ aligned with the data patches. The per-patch input projection widens from $2P$ to $3P$: $\mathbf{e}_i = \text{ResBlock}_{3P \to d}([\mathbf{p}_i; \mathbf{m}_i; \tilde{\mathbf{h}}_i])$, where $\mathbf{p}_i$ is the data patch and $\mathbf{m}_i$ the observation mask. Only this first linear layer widens (adding $12$K parameters, $0.11\%$ of Moirai-2 Small); the transformer decoder is unchanged. We refer to this default ($d=4$ Chebyshev preconditioning, no dropout) as \texttt{d4}, and to the same architecture trained with $10\%$ per-patch channel dropout as \texttt{d4\_dropout}.
 
-\paragraph{Hint dropout.} During training, each patch's hint is independently zeroed with probability $p_{\text{drop}}{=}0.1$, preventing over-reliance on hints. At inference, the full hint is provided.
+\paragraph{Training and inference.} We otherwise reproduce the architecture, training, and inference protocol of Moirai-2 Small \citep{liu2024moirai2}: identical model size, optimizer, loss, data pipeline, and autoregressive multi-step decoding. The only modification is the wider input projection and, for \texttt{d4\_dropout}, the per-patch channel dropout (each patch's preconditioning vector independently zeroed with probability $0.1$ during training; always provided at inference). The preconditioning channel is computed once on the normalized series, in the same way at both train and inference time. At inference, lag values that fall in the context window are real observations; lag values that fall in the prediction window are zero before the model has emitted anything there, and the model's own predictions thereafter (since Moirai-2 forecasts a prediction-length window in chunks and re-runs the encoder per chunk).
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig_architecture.pdf}
 \vskip -0.1in
-\caption{(a) Standard patch transformer; (b) with hint preconditioning. Only the input projection is wider (orange). Total overhead: 12K parameters (0.11\%).}
+\caption{Moirai-2.0 architecture: (a) standard patch transformer; (b) with polynomial input preconditioning. Only the per-patch input projection is wider; the transformer decoder is unchanged. Total overhead: $12$K parameters ($0.11\%$).}
 \label{fig:arch}
 \vskip -0.1in
 \end{figure}
@@ -82,71 +84,56 @@ with $a_0 = 1$ and remaining coefficients derived from $\tilde T_d$. For $d=4$ a
 \section{Experiments}
 %==============================================================================
 
-\paragraph{Setup.} We train Moirai-2 Small \citep{liu2024moirai2} (11.4M params, 6-layer transformer, $P{=}16$) from scratch on the LOTSA corpus \citep{woo2024unified} for 10K steps (batch 256, AdamW, cosine LR $10^{-3}$, 1K warmup, bf16). Our Baseline is a \emph{best-effort from-scratch retrain} of Moirai-2 Small under this protocol---the official Moirai~2.0-R-Small release used Salesforce's full, undisclosed training compute, so our retrain does not (and cannot) reproduce its absolute leaderboard numbers. All four conditions in this paper (Baseline, HD10, Zero, Duplicate) share identical data, optimiser, seeds, and compute, so the effects we report are controlled \emph{relative} improvements; absolute leaderboard context is given in Appendix~\ref{app:leaderboard}. Evaluation uses GIFT-Eval \citep{vijay2024gifteval} (97 dataset$\times$horizon configs) at context length 4,000. We report normalized MASE following the GIFT-Eval leaderboard convention: each configuration's MASE is divided by the seasonal naive baseline's MASE, then aggregated via geometric mean. We run 5 seeds (0, 1, 2, 7, 42) and use paired sign tests pooled across seeds (485 comparisons). See Appendix~\ref{app:methodology} for full details.
+\paragraph{Setup.} We train Moirai-2 Small \citep{liu2024moirai2} (11.4M params, 6-layer transformer, $P{=}16$) from scratch on the LOTSA corpus \citep{woo2024unified} for 10K steps (batch 256, AdamW, cosine LR $10^{-3}$, 1K warmup, bf16). Our Baseline is a \emph{best-effort from-scratch retrain} of Moirai-2 Small under this protocol---the official Moirai~2.0-R-Small release used Salesforce's full, undisclosed training compute, so our retrain does not (and cannot) reproduce its absolute leaderboard numbers. All conditions share identical data, optimiser, seeds, and compute, so the effects we report are controlled \emph{relative} improvements. Evaluation uses GIFT-Eval \citep{vijay2024gifteval} (97 dataset$\times$horizon configs) at context length 4{,}000 and the independent FEV-Bench \citep{das2024decoder} (100 tasks). We report normalized MASE following the GIFT-Eval leaderboard convention: each configuration's MASE is divided by the seasonal naive baseline's MASE, then aggregated via geometric mean. We run 5 seeds (0, 1, 2, 7, 42) and report cross-seed mean and standard deviation. See Appendix~\ref{app:methodology} for full details.
 
-\paragraph{Conditions.} Baseline (standard Moirai-2), Zero (hint architecture with all-zero hints), Duplicate (hint = copy of input), and \textbf{HD10} (Chebyshev $d{=}4$, stride 16, 10\% dropout).
+\paragraph{Conditions.} We compare four conditions, all sharing the same training data, optimizer, and seeds. \textbf{Baseline} is unmodified Moirai-2 (no preconditioning channel). \textbf{\texttt{d4}} and \textbf{\texttt{d4\_dropout}} add the polynomial preconditioning channel of \S2 (without and with $10\%$ per-patch channel dropout). \textbf{Zero} and \textbf{Duplicate} are capacity-matched controls: they share \texttt{d4\_dropout}'s widened input projection and $12$K extra parameters, but feed the third channel either all zeros (Zero) or a copy of the data channel (Duplicate). They isolate whether any gain comes from the polynomial content or merely from the extra capacity.
 
 \subsection{Main Results}
 
 \begin{table}[t]
-\caption{Main results (5 seeds, 485 comparisons on GIFT-Eval). HD10 significantly outperforms baseline and both capacity controls.}
+\caption{Main results on GIFT-Eval (5 seeds, normalized geomean MASE). MASE is the cross-seed mean; Std the cross-seed std. Wins counts seed--config pairs where the method beats Baseline (out of $5 \times 97 = 485$). Per-seed breakdown in Appendix~\ref{app:seeds}.}
 \label{tab:main}
 \vskip 0.1in
 \centering
 \begin{small}
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Method} & \textbf{MASE} & \textbf{vs BL} & \textbf{Wins} & \textbf{$p$-value} \\
+\textbf{Method} & \textbf{MASE} & \textbf{Std} & \textbf{vs BL} & \textbf{Wins} \\
 \midrule
-\textbf{HD10 (Ours)} & \textbf{0.837} & \textbf{$-$2.9\%} & \textbf{329/485} & $\mathbf{10^{-15}}$ \\
-Zero channel & 0.858 & $-$0.5\% & 262/485 & 0.042 \\
-Baseline & 0.862 & --- & --- & --- \\
-Duplicate & 0.865 & $+$0.4\% & 217/485 & 0.99 \\
+\textbf{\texttt{d4\_dropout}} \textbf{(Ours)} & \textbf{0.837} & $0.008$ & \textbf{$-$2.9\%} & \textbf{329/485} \\
+\texttt{d4} (Ours)         & 0.838          & $0.007$ & $-2.8\%$         & 329/485 \\
+Zero channel                 & 0.858          & $0.010$ & $-$0.5\%         & 262/485 \\
+Baseline                     & 0.862          & $0.006$ & ---              & --- \\
+Duplicate                    & 0.865          & $0.008$ & $+$0.4\%         & 217/485 \\
 \bottomrule
 \end{tabular}
 \end{small}
 \vskip -0.1in
 \end{table}
 
-Table~\ref{tab:main} shows that HD10 improves MASE by 2.9\% over the baseline ($p < 10^{-15}$). Table~\ref{tab:per-seed} breaks this down by seed: HD10 beats the baseline on \emph{every} seed, with per-seed improvements ranging from $+0.4\%$ (the weakest seed, 54 of 97 wins) to $+5.0\%$ (66 of 97 wins, $p = 2.5 \times 10^{-4}$), ruling out a dependence on any single initialisation.
+Both \texttt{d4} and \texttt{d4\_dropout} improve over Baseline on every seed (Appendix~\ref{app:seeds}); their cross-seed means are within $0.1\%$ of each other, so the bulk of the gain comes from the polynomial content rather than the dropout. Zero and Duplicate share \texttt{d4\_dropout}'s architecture and $12$K-parameter overhead, isolating the causal role of polynomial content: Duplicate \emph{hurts} (217/485 wins, below chance) and Zero is at best marginal (262/485). The improvement is driven by the polynomial filter, not the extra parameters.
+
+\paragraph{FEV-Bench.} On the independent FEV-Bench (100 tasks; full degree sweep in Appendix~\ref{app:fevbench}), \texttt{d4\_dropout} improves over Baseline by similar margins as on GIFT-Eval, confirming the benefit is not benchmark-specific.
 
 \begin{table}[t]
-\caption{Per-seed HD10 vs.\ Baseline at $10$K steps (normalized geomean MASE, $97$ configs each). HD10 wins on all five seeds.}
-\label{tab:per-seed}
-\vskip 0.1in
+\caption{FEV-Bench: \texttt{d4\_dropout} (5-seed mean) vs single-seed Baseline. SQL is FEV-Bench's scaled quantile loss. Cross-seed std for ours is $\le 0.007$ on both metrics.}
+\label{tab:fev-main}
+\vskip 0.05in
 \centering
+\setlength{\tabcolsep}{4pt}
 \begin{small}
-\begin{tabular}{cccccc}
+\begin{tabular}{lccc}
 \toprule
-\textbf{Seed} & \textbf{BL} & \textbf{HD10} & \textbf{$\Delta$\%} & \textbf{Wins/97} & \textbf{$p$-value} \\
+\textbf{Method} & \textbf{MASE} & \textbf{SQL} & \textbf{Wins} \\
 \midrule
-0  & 0.8666 & 0.8234 & $-4.99\%$ & 66 & $2.5\!\times\!10^{-4}$ \\
-1  & 0.8503 & 0.8465 & $-0.44\%$ & 54 & $0.155$ \\
-2  & 0.8630 & 0.8391 & $-2.77\%$ & 70 & $7.4\!\times\!10^{-6}$ \\
-7  & 0.8676 & 0.8320 & $-4.11\%$ & 78 & $5.8\!\times\!10^{-10}$ \\
-42 & 0.8614 & 0.8430 & $-2.13\%$ & 61 & $7.2\!\times\!10^{-3}$ \\
-\midrule
-\textbf{Pool} & \textbf{0.8617} & \textbf{0.8368} & \textbf{$-2.89\%$} & \textbf{329/485} & $\mathbf{1.5\!\times\!10^{-15}}$ \\
+\textbf{\texttt{d4\_dropout}} \textbf{(Ours)} & \textbf{1.2532} & \textbf{1.0236} & \textbf{72/100} \\
+Baseline                                      & $1.2908$        & $1.0562$        & --- \\
+$\Delta\%$ vs BL                              & $-2.91\%$       & $-3.09\%$       &  \\
 \bottomrule
 \end{tabular}
 \end{small}
 \vskip -0.1in
 \end{table}
-
-We also confirm the effect on the independent FEV-Bench~\citep{das2024decoder} (100 tasks; Appendix~\ref{app:fevbench}): HD10 improves geometric-mean MASE by $+2.5\%$ ($1.253$ vs.\ $1.284$) and the quantile SQL metric by $+1.3\%$ ($1.657$ vs.\ $1.679$), winning $72$ of $100$ tasks. Under the official Moirai~2.0 protocol ($10$K warmup, $100$K steps) HD10 still improves by $2.3\%$, confirming the benefit is robust to training schedule (Appendix~\ref{app:official_protocol}).
-
-\subsection{Capacity Controls}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/capacity_control.pdf}
-\vskip -0.1in
-\caption{Capacity controls. (a) 5-seed normalized geomean MASE on GIFT-Eval; error bars: cross-seed std. Baseline, Zero, and Duplicate share the HD10 architecture and parameter count, differing only in the auxiliary-channel content. (b) Paired win rates across 485 (seed $\times$ config) comparisons. \emph{Duplicate hurts}; \emph{Zero is at best marginal}; HD10 wins $\geq 66\%$ of comparisons against every control.}
-\label{fig:capacity}
-\vskip -0.1in
-\end{figure}
-
-Figure~\ref{fig:capacity} isolates the causal role of polynomial content. Zero (auxiliary channel set to zeros) and Duplicate (auxiliary channel = copy of the input) share HD10's architecture and $12$K parameter overhead, so any improvement from these conditions would be attributable to widened input capacity rather than to the Chebyshev filter. Empirically, Duplicate \emph{degrades} performance (217/485 wins, below the 50\% chance line) and Zero is at best marginally helpful (262/485, $p = 0.04$ unadjusted); meanwhile HD10 vs.\ Duplicate reaches $336/485$ wins ($p = 6 \times 10^{-18}$) and HD10 vs.\ Zero reaches $323/485$ ($p = 1.1 \times 10^{-13}$). The improvement is driven by the \emph{polynomial content} of the hint, not by the extra parameters.
 
 \subsection{Ablations}
 
@@ -154,12 +141,12 @@ Figure~\ref{fig:capacity} isolates the causal role of polynomial content. Zero (
 \centering
 \includegraphics[width=0.95\columnwidth]{figures/degree_sweep_line.pdf}
 \vskip -0.1in
-\caption{Chebyshev polynomial degree sweep (10K steps, stride $s{=}16$, $10\%$ hint dropout). Filled blue circles are 5-seed means with $\pm 1$ std error bars (seeds 0, 1, 2, 7, 42). Grey band: Baseline 5-seed mean $\pm 1$ std. Every $d \geq 2$ beats the baseline; $d=4$ is optimal but the curve is shallow---all $d \in \{3, 4, 5, 6, 8\}$ fall within $\sim$0.6\% of the optimum, indicating the improvement is robust to the specific degree choice. Full ablations over stride, basis, and hint dropout are in Appendix~\ref{app:ablations}.}
+\caption{Chebyshev polynomial degree sweep (10K steps, stride $s{=}16$, $10\%$ channel dropout). Filled blue circles are 5-seed means with $\pm 1$ std error bars (seeds 0, 1, 2, 7, 42). Grey band: Baseline 5-seed mean $\pm 1$ std. Every $d \geq 2$ beats the baseline; the curve is shallow with $d \in \{3, 4, 5, 6, 8\}$ within $\sim$0.6\% of each other. Full ablations over stride, basis, and channel dropout are in Appendix~\ref{app:ablations}.}
 \label{fig:degree-sweep}
 \vskip -0.1in
 \end{figure}
 
-Figure~\ref{fig:degree-sweep} sweeps the Chebyshev polynomial degree $d \in \{2,3,4,5,6,7,8\}$ over 5 seeds each. Three qualitative features are visible: (i) every $d \geq 2$ beats the baseline, so the improvement is robust to the specific degree choice; (ii) the curve is shallow---the gap between best ($d=4$, $0.837$) and the second tier ($d \in \{3, 5, 6, 8\}$, $0.840$--$0.842$) is comparable to the seed-to-seed standard deviation, so we treat $d = 4$ as a representative working choice rather than a uniquely optimal one; (iii) the extreme degrees $d = 2$ ($0.850$) and $d = 7$ ($0.847$) trail the rest, consistent with the spectral interpretation: $d{=}2$ has only a single non-trivial lag while $d=7$ over-emphasises high-frequency cancellation. Appendix~\ref{app:ablations} reports complementary ablations (stride $s \in \{4,8,16,32\}$ with $s = P = 16$ optimal; Chebyshev basis outperforms EMA/Legendre/finite-differences; hint dropout inverted-U with $10\%$ optimum) and inference-time content ablations confirming the model exploits the specific polynomial structure rather than generic extra capacity.
+Figure~\ref{fig:degree-sweep} sweeps Chebyshev polynomial degree $d \in \{2,\ldots,8\}$ over 5 seeds. Every $d \geq 2$ beats the baseline; the curve is shallow---$d \in \{3,4,5,6,8\}$ are all within $\sim$0.6\% of each other---so $d=4$ is representative rather than uniquely optimal. The extremes $d=2$ and $d=7$ trail the rest. Appendix~\ref{app:ablations} reports stride/basis/dropout ablations ($s = P = 16$ optimal; Chebyshev outperforms EMA/Legendre/finite-differences; dropout inverted-U with $10\%$ optimum) and inference-time content ablations confirming the model exploits the specific polynomial structure rather than generic extra capacity.
 
 \subsection{Extended Training and Robustness}
 
@@ -173,7 +160,7 @@ Figure~\ref{fig:degree-sweep} sweeps the Chebyshev polynomial degree $d \in \{2,
 \toprule
 \textbf{Method} & \textbf{MASE} & \textbf{$\Delta$\% vs BL} & \textbf{Std} \\
 \midrule
-\textbf{HD10 (Ours)} & \textbf{0.8443} & \textbf{$-3.88\%$} & $0.009$ \\
+\textbf{\texttt{d4\_dropout}} \textbf{(Ours)} & \textbf{0.8443} & \textbf{$-3.88\%$} & $0.009$ \\
 Baseline            & $0.8784$        & ---               & $0.019$ \\
 Duplicate (cap.\ ctrl) & $0.8860$        & $+0.86\%$         & $0.008$ \\
 Zero (cap.\ ctrl)      & $0.8937$        & $+1.73\%$         & $0.036$ \\
@@ -183,59 +170,60 @@ Zero (cap.\ ctrl)      & $0.8937$        & $+1.73\%$         & $0.036$ \\
 \vskip -0.1in
 \end{table}
 
-At 100K optimizer steps (Table~\ref{tab:100k}, 5 seeds) the improvement of HD10 over the baseline \emph{grows} to $3.9\%$, while both capacity controls now actively \emph{hurt} (Duplicate $+0.9\%$, Zero $+1.7\%$)---the polynomial-content effect not only persists but sharpens with training budget. The baseline also shows much higher cross-seed variance ($\sigma = 0.019$, range $0.863$--$0.909$) than HD10 ($\sigma = 0.009$), consistent with the hint channel regularising late-training instability. Training loss differences are much smaller than eval gains: at $10$K, HD10's loss is $1.0\%$ lower yet eval improves by $2.9\%$---a $2.9\times$ amplification (Appendix~\ref{app:trainloss}).
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_training_loss_main.pdf}
+\vskip -0.1in
+\caption{Training loss on LOTSA (seed 0, 10K steps, EMA-smoothed). Left: full curve. Right: zoom on steps 4{,}000--10{,}000. \texttt{d4} and \texttt{d4\_dropout} both track lower than Baseline once training enters the bulk regime; their eval-MASE values are within $0.1\%$ of each other (Table~\ref{tab:main}).}
+\label{fig:trainloss}
+\vskip -0.1in
+\end{figure}
 
-\paragraph{Domain \& frequency.} Improvements are strongest in high-temporal-resolution domains whose natural periodicities match the filter's $32/64$-step lookback (Table~\ref{tab:domain}). Weather and healthcare datasets, dominated by scales outside this range, show no significant improvement (Appendix~\ref{app:domain}). A per-dataset spectral-correlate analysis confirms that datasets whose spectrum concentrates in the filter's \emph{passband} (where $|H(\omega)|^2$ exceeds its median) benefit more ($r = +0.10$ over $39$ unique (dataset, frequency) pairs)---the direction the theory predicts.
+At 100K optimizer steps (Table~\ref{tab:100k}, 5 seeds) the improvement \emph{grows} to $3.9\%$ while both capacity controls now actively \emph{hurt} (Duplicate $+0.9\%$, Zero $+1.7\%$); \texttt{d4\_dropout} also shows much lower cross-seed variance ($\sigma = 0.009$ vs $0.019$ for BL), consistent with channel regularisation of late-training instability. The training-loss separation (Fig.~\ref{fig:trainloss}) is much smaller than the eval-MASE separation (at $10$K, train loss is $1.0\%$ lower but eval improves $2.9\%$---a $2.9\times$ amplification, Appendix~\ref{app:trainloss}).
+
+\paragraph{Domain, frequency, and context.} The benefit concentrates in high-resolution domains whose natural periodicities match the filter's $32/64$-step lookback: Demographics ($+9.8\%$), Transport ($+6.9\%$), Energy ($+4.0\%$); Weather ($+0.3\%$) and Healthcare ($+0.2\%$) are essentially unchanged (Appendix~\ref{app:domain}). The benefit is approximately constant ($\sim 5\%$) across context lengths $512$--$4{,}000$; \texttt{d4\_dropout} at context $2{,}000$ outperforms the baseline at context $4{,}000$ (Appendix~\ref{app:context}). \texttt{d4\_dropout} is also insensitive to learning rate ($0.1\%$ MASE change between $\eta = 10^{-3}$ and $2 \times 10^{-3}$) while the baseline varies $2.3\%$; at matched optimal LR, \texttt{d4\_dropout} still wins ($280/485$, Appendix~\ref{app:matchedlr}).
+
+\paragraph{Horizon stratification.} On short horizons (PL $\leq 60$) \texttt{d4} and \texttt{d4\_dropout} are within $0.4\%$ of each other (Table~\ref{tab:horizon-main}; full analysis in Appendix~\ref{app:horizon}); on medium and long horizons (PL $\geq 480$) \texttt{d4\_dropout} beats \texttt{d4} by $0.7$--$0.85\%$ relative MASE---the direction the dropout-as-mismatch-regulariser story predicts but small relative to the $\sim 4\%$ HD-vs-Baseline gap.
 
 \begin{table}[t]
-\caption{Per-domain HD10 vs.\ Baseline (5 seeds pooled, 485 observations). Domains ordered by effect size.}
-\label{tab:domain}
-\vskip 0.08in
+\caption{Horizon stratification of \texttt{d4} vs \texttt{d4\_dropout} vs Baseline. 5-seed cross-config geomean MASE; $\Delta\%$ relative to BL within each bin.}
+\label{tab:horizon-main}
+\vskip 0.06in
 \centering
 \begin{small}
-\begin{tabular}{lrrr}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Domain} & \textbf{$n$} & \textbf{$\Delta$\%} & \textbf{$p$} \\
+\textbf{Term} & \textbf{$n$} & \textbf{BL} & \texttt{d4} \textbf{($\Delta$)} & \texttt{d4\_dropout} \textbf{($\Delta$)} \\
 \midrule
-Demographics       & $15$  & $+9.8\%$  & $0.004$               \\
-Transport          & $55$  & $+6.9\%$  & $4\!\times\!10^{-8}$  \\
-Energy             & $80$  & $+4.0\%$  & $2\!\times\!10^{-4}$  \\
-IT / Cloud         & $120$ & $+2.2\%$  & $8\!\times\!10^{-5}$  \\
-ETT (Industrial)   & $80$  & $+1.5\%$  & $0.001$               \\
-Weather            & $75$  & $+0.3\%$  & $0.68$ (ns)           \\
-Healthcare         & $10$  & $+0.2\%$  & $0.62$ (ns)           \\
+short  & 55 & 0.840 & 0.825 ($-1.8\%$) & 0.828 ($-1.4\%$) \\
+medium & 21 & 0.859 & 0.830 ($-3.4\%$) & \textbf{0.823 ($-4.2\%$)} \\
+long   & 21 & 0.924 & 0.880 ($-4.7\%$) & \textbf{0.874 ($-5.3\%$)} \\
 \bottomrule
 \end{tabular}
 \end{small}
-\vskip -0.1in
+\vskip -0.15in
 \end{table}
-
-\paragraph{Context length and learning rate.} The benefit is approximately constant ($\sim 5\%$) across context lengths $512$--$4{,}000$; HD10 at context $2{,}000$ outperforms the baseline at context $4{,}000$ ($0.833$ vs.\ $0.867$; Appendix~\ref{app:context}). HD10 is also insensitive to learning rate ($0.1\%$ MASE change between $\eta = 10^{-3}$ and $2 \times 10^{-3}$), while the baseline varies $2.3\%$; at matched optimal LR, HD10 still wins significantly ($280/485$, $p = 3.8 \times 10^{-4}$, Appendix~\ref{app:matchedlr}).
 
 %==============================================================================
 \section{Related Work}
 %==============================================================================
 
 \paragraph{Time-series foundation models.}
-Transformer-based universal forecasters have proliferated~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex}, trained on large, heterogeneous corpora for zero-shot forecasting across unseen domains. Recent work questions whether current TSFMs meaningfully exceed simple classical baselines in the zero-shot regime~\citep{zhang2025tsfmready}---a critique that motivates exactly our regime of interest: strengthening compact foundation models at low parameter cost. Most architectural innovation in this space (rotary position embeddings, attention variants, mixture-of-experts~\citep{liu2024moirai2}) targets the transformer stack; hint preconditioning is \emph{orthogonal}, acting on the input representation before any attention layer.
+Transformer-based universal forecasters have proliferated~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex}, trained on large, heterogeneous corpora for zero-shot forecasting across unseen domains. Recent work questions whether current TSFMs meaningfully exceed simple classical baselines in the zero-shot regime~\citep{zhang2025tsfmready}---a critique that motivates exactly our regime of interest: strengthening compact foundation models at low parameter cost. Most architectural innovation in this space (rotary position embeddings, attention variants, mixture-of-experts~\citep{liu2024moirai2}) targets the transformer stack; input preconditioning is \emph{orthogonal}, acting on the input representation before any attention layer.
 
 \paragraph{Patching and cross-patch information.}
-Patch-based architectures~\citep{nie2023patchtst,dosovitskiy2021image} dominate modern TSFMs. PatchTST uses \emph{overlapping} patches to partially mitigate the cross-patch bottleneck; our approach achieves the same effect without increasing FLOPs or encoder parameters, and is compatible with both overlapping and non-overlapping patch schemes.
+Patch-based architectures~\citep{nie2023patchtst,dosovitskiy2021image} dominate modern TSFMs. PatchTST uses \emph{overlapping} patches to partially mitigate the cross-patch bottleneck; our approach achieves the same effect without increasing FLOPs or decoder parameters, and is compatible with both overlapping and non-overlapping patch schemes.
 
 \paragraph{Spectral methods in sequence modelling.}
-The connection between spectral filtering and online sequence prediction has a rich history. \citet{hazan2017learning} and \citet{hazan2018spectral} developed spectral-filtering algorithms for online LDS prediction with theoretical guarantees bypassing the hidden dimension. \citet{marsden2024universal} unify and extend this line via polynomial preconditioning and directly motivate our filter choice. Classical FIR filter design with Chebyshev polynomials has a long tradition~\citep{parks1972chebyshev,oppenheim1999discrete}; our contribution is to bring it to bear on the input representation of a modern pretrained foundation model, rather than as a post-hoc smoother or as a component of a hand-designed state-space model.
+\citet{hazan2017learning,hazan2018spectral} developed spectral-filtering algorithms for online LDS prediction with hidden-dimension-free guarantees; \citet{marsden2024universal} unify this line via polynomial preconditioning. Classical FIR design with Chebyshev polynomials has a long tradition~\citep{parks1972chebyshev,oppenheim1999discrete}; our contribution is to bring it to bear on the input representation of a pretrained foundation model rather than as a post-hoc smoother.
 
 %==============================================================================
 \section{Discussion and Conclusion}
 %==============================================================================
 
-Polynomial hint preconditioning adapts the spectral-compression guarantee of \citet{marsden2024universal} from idealised online LDS prediction to pretrained patch-based time-series transformers. By \emph{concatenating} the preconditioned signal as an auxiliary channel---rather than preconditioning the target and inverting at inference---we avoid catastrophic error accumulation that would otherwise derail multi-step forecasting. The resulting design adds $0.11\%$ parameters, leaves the transformer encoder unchanged, and applies unmodified to any patch-based architecture \citep{woo2024unified,nie2023patchtst,das2024decoder}.
+Polynomial input preconditioning adapts the spectral-compression guarantee of \citet{marsden2024universal} from online LDS prediction to pretrained patch-based time-series transformers. Concatenating the preconditioned signal as an auxiliary channel avoids the error accumulation of target-side preconditioning at multi-step horizons, and adds only $0.11\%$ parameters. Two limitations are consistent with the spectral interpretation: at Base ($46$M) scale the per-seed gain is inconsistent (sufficient attention capacity appears to absorb the inductive bias); and at matched optimal LR the gain attenuates to $+0.7\%$ ($280/485$ wins), so part of the headline $2.9\%$ is \texttt{d4\_dropout}'s LR-insensitivity.
 
-Two limitations are worth flagging. \emph{Model scale:} at the Base ($46$M) scale, the per-seed improvement is seed-dependent and not consistently significant, suggesting sufficient attention capacity eventually absorbs the inductive bias the hint channel provides. \emph{Learning-rate confounding:} at matched optimal learning rate, the improvement attenuates to $+0.7\%$ (still $p = 3.8 \times 10^{-4}$); part of the headline $2.9\%$ gain reflects HD10's greater insensitivity to optimisation hyperparameters. Both limitations are consistent with the spectral-mechanism interpretation and point at concrete directions for follow-up work: domain-adaptive stride/degree, and interaction with attention-capacity scaling laws.
-
-\section*{Impact Statement}
-
-This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here.
+\paragraph{Impact statement.} This paper advances the field of Machine Learning; we identify no societal consequences requiring specific highlighting.
 
 \bibliography{references}
 \bibliographystyle{icml2026}
@@ -261,7 +249,7 @@ All experiments use identical training infrastructure on NVIDIA H100/A100 GPUs. 
 \textbf{Parameter} & \textbf{Value} \\
 \midrule
 Architecture & Moirai-2 Small (6 layers, $d=384$, $d_{\text{ff}}=1024$, $P=16$) \\
-Total parameters & 11.4M (baseline), 11.4M + 12K (HD10) \\
+Total parameters & 11.4M (baseline), 11.4M + 12K (\texttt{d4\_dropout}) \\
 Training data & LOTSA v1, Moirai-2 config (weighted, variate-proportional) \\
 Steps (10K runs) & 100 epochs $\times$ 100 batches = 10,000 steps \\
 Steps (100K runs) & 1,000 epochs $\times$ 100 batches = 100,000 steps \\
@@ -285,23 +273,22 @@ All evaluations use the GIFT-Eval benchmark \citep{vijay2024gifteval} with 97 da
     \item Batch size: 64
     \item Metric: Normalized MASE (each configuration's MASE divided by the seasonal naive baseline's MASE)
     \item Aggregation: geometric mean across 97 configurations
-    \item Statistical test: paired sign test (binomial, two-sided) on per-configuration wins
-    \item Pooling: across seeds, giving $5 \times 97 = 485$ comparisons
+    \item Reported quantities: cross-seed mean and standard deviation, per-seed MASE, and per-configuration win counts (out of 97 per seed; $5 \times 97 = 485$ when pooled across seeds)
 \end{itemize}
 
-\subsection{Hint Channel Implementation}
+\subsection{Preconditioning Channel Implementation}
 
-The Chebyshev polynomial $T_d(z)$ is expanded in the monomial basis to obtain FIR filter coefficients $c_0, \ldots, c_d$. The hint signal for time step $t$ is:
+The Chebyshev polynomial $T_d(z)$ is expanded in the monomial basis to obtain FIR filter coefficients $c_0, \ldots, c_d$. The preconditioned signal for time step $t$ is:
 \[
 \tilde{h}[t] = \left(\sum_{k=0}^{d} c_k \, x[t - ks]\right) - x[t]
 \]
-This is computed over the full (normalized, zero-mean unit-variance) time series before patching. Unobserved time steps are masked to zero. During training with hint dropout $p$, each patch's hint independently has probability $p$ of being replaced with zeros. At inference, the full hint is always provided.
+This is computed over the full (normalized, zero-mean unit-variance) time series before patching. Unobserved time steps are masked to zero. During training with channel dropout $p$, each patch's preconditioning channel independently has probability $p$ of being replaced with zeros. At inference, the full preconditioning channel is always provided.
 
-The hint channel is concatenated with the target and mask channels before the input projection:
+The preconditioning channel is concatenated with the target and mask channels before the input projection:
 \[
 \mathbf{e}_i = \text{ResBlock}_{(2+n_h)P \to d}([\mathbf{p}_i; \mathbf{m}_i; \tilde{\mathbf{h}}^{(1)}_i; \ldots; \tilde{\mathbf{h}}^{(n_h)}_i])
 \]
-where $n_h = 1$ for single-scale (HD10) and $n_h = 2$ for multi-scale (MSHD10). The ResBlock consists of:
+where $n_h = 1$ for single-scale (\texttt{d4\_dropout}) and $n_h = 2$ for multi-scale (MSHD10). The ResBlock consists of:
 \begin{align}
 \mathbf{z} &= \text{SiLU}(W_1 \mathbf{x} + b_1) & W_1 &\in \mathbb{R}^{d \times (2+n_h)P} \\
 \mathbf{o} &= W_2 \mathbf{z} + b_2 + W_3 \mathbf{x} + b_3 & W_2 &\in \mathbb{R}^{d \times d}, \; W_3 \in \mathbb{R}^{d \times (2+n_h)P}
@@ -315,19 +302,20 @@ Only $W_1$ and $W_3$ are wider than the baseline. $W_2$ and all downstream layer
 
 \begin{table}[h]
 \centering
-\caption{HD10 vs.\ Baseline: per-seed pairwise comparison (10K steps, $\eta = 10^{-3}$).}
+\caption{\texttt{d4\_dropout} vs.\ Baseline: per-seed pairwise comparison (10K steps, $\eta = 10^{-3}$).}
 \small
-\begin{tabular}{cccccc}
+\begin{tabular}{ccccc}
 \toprule
-\textbf{Seed} & \textbf{BL MASE} & \textbf{HD10 MASE} & \textbf{$\Delta$\%} & \textbf{Wins/97} & \textbf{$p$-value} \\
+\textbf{Seed} & \textbf{BL MASE} & \textbf{\texttt{d4\_dropout} MASE} & \textbf{$\Delta$\%} & \textbf{Wins/97} \\
 \midrule
-0 & 0.8666 & 0.8234 & $+4.99\%$ & 66 & $2.5 \times 10^{-4}$ \\
-1 & 0.8503 & 0.8465 & $+0.44\%$ & 54 & 0.155 \\
-2 & 0.8630 & 0.8391 & $+2.77\%$ & 70 & $7.4 \times 10^{-6}$ \\
-7 & 0.8676 & 0.8320 & $+4.11\%$ & 78 & $5.8 \times 10^{-10}$ \\
-42 & 0.8614 & 0.8430 & $+2.13\%$ & 61 & $7.2 \times 10^{-3}$ \\
+0 & 0.8666 & 0.8234 & $+4.99\%$ & 66 \\
+1 & 0.8503 & 0.8465 & $+0.44\%$ & 54 \\
+2 & 0.8630 & 0.8391 & $+2.77\%$ & 70 \\
+7 & 0.8676 & 0.8320 & $+4.11\%$ & 78 \\
+42 & 0.8614 & 0.8430 & $+2.13\%$ & 61 \\
 \midrule
-\textbf{Pooled} & \textbf{0.8617} & \textbf{0.8368} & \textbf{$+2.89\%$} & \textbf{329/485} & $\mathbf{1.5 \times 10^{-15}}$ \\
+\textbf{Mean} & \textbf{0.8617} & \textbf{0.8368} & \textbf{$+2.89\%$} & \textbf{329/485} \\
+\textbf{Std}  & $0.0062$ & $0.0083$ & $1.58\%$ & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -336,11 +324,11 @@ Per-seed MASE for all four conditions:
 
 \begin{table}[h]
 \centering
-\caption{Per-seed results. HD10 achieves lower MASE than all controls on every seed.}
+\caption{Per-seed results. \texttt{d4\_dropout} achieves lower MASE than all controls on every seed.}
 \small
 \begin{tabular}{ccccc}
 \toprule
-\textbf{Seed} & \textbf{Baseline} & \textbf{HD10 (Ours)} & \textbf{Zero} & \textbf{Duplicate} \\
+\textbf{Seed} & \textbf{Baseline} & \textbf{\texttt{d4\_dropout} (Ours)} & \textbf{Zero} & \textbf{Duplicate} \\
 \midrule
 0 & 0.8666 & \textbf{0.8234} & 0.8586 & 0.8777 \\
 1 & 0.8503 & \textbf{0.8465} & 0.8738 & 0.8546 \\
@@ -354,7 +342,7 @@ Per-seed MASE for all four conditions:
 \end{tabular}
 \end{table}
 
-When averaging each configuration's MASE across all 5 seeds, HD10 wins 72/97 configurations ($p_{\text{sign}} = 9.6 \times 10^{-7}$; $p_{\text{Wilcoxon}} = 9.0 \times 10^{-9}$). HD10 wins 3+ out of 5 seeds on 76.3\% of configurations, and wins all 5 seeds on 23 configurations. Only 2 configurations see the baseline win all 5 seeds.
+When averaging each configuration's MASE across all 5 seeds, \texttt{d4\_dropout} wins 72/97 configurations. \texttt{d4\_dropout} wins 3+ out of 5 seeds on 76.3\% of configurations, and wins all 5 seeds on 23 configurations. Only 2 configurations see the baseline win all 5 seeds.
 
 %==============================================================================
 \section{Training Loss Analysis}
@@ -363,37 +351,37 @@ When averaging each configuration's MASE across all 5 seeds, HD10 wins 72/97 con
 
 \begin{table}[h]
 \centering
-\caption{Final training loss across 5 seeds at 10K steps ($\eta = 10^{-3}$). Training loss differences are small ($\sim$1\%), while eval MASE differences are much larger ($\sim$3\%), confirming hints act as a regularizer.}
+\caption{Final training loss across 5 seeds at 10K steps ($\eta = 10^{-3}$). Training loss differences are small ($\sim$1\%), while eval MASE differences are much larger ($\sim$3\%), confirming preconditioning acts as a regularizer.}
 \small
 \begin{tabular}{lcccccccc}
 \toprule
 \textbf{Method} & \textbf{s0} & \textbf{s1} & \textbf{s2} & \textbf{s7} & \textbf{s42} & \textbf{Mean} & \textbf{Std} & \textbf{Eval MASE} \\
 \midrule
 Baseline & .1366 & .1365 & .1358 & .1366 & .1365 & .1364 & .0003 & 0.8617 \\
-\textbf{HD10 (ours)} & .1354 & .1350 & .1350 & .1353 & .1343 & \textbf{.1350} & .0004 & \textbf{0.8368} \\
+\textbf{\texttt{d4\_dropout} (ours)} & .1354 & .1350 & .1350 & .1353 & .1343 & \textbf{.1350} & .0004 & \textbf{0.8368} \\
 Zero & .1378 & .1369 & .1363 & .1366 & .1353 & .1366 & .0008 & 0.8578 \\
 Duplicate & .1376 & .1366 & .1370 & .1365 & .1355 & .1366 & .0007 & 0.8650 \\
 \midrule
-\multicolumn{2}{l}{\textbf{HD10 $\Delta$\% vs BL}} & & & & & $-1.0\%$ & & $-2.9\%$ \\
+\multicolumn{2}{l}{\textbf{\texttt{d4\_dropout} $\Delta$\% vs BL}} & & & & & $-1.0\%$ & & $-2.9\%$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}[h]
 \centering
-\caption{Final training loss across seeds at 100K steps ($\eta = 10^{-3}$). HD10 maintains lower training loss on every seed.}
+\caption{Final training loss across seeds at 100K steps ($\eta = 10^{-3}$). \texttt{d4\_dropout} maintains lower training loss on every seed.}
 \small
 \begin{tabular}{lcccccccc}
 \toprule
 \textbf{Method} & \textbf{s0} & \textbf{s1} & \textbf{s2} & \textbf{s7} & \textbf{s42} & \textbf{Mean} & \textbf{Std} & \textbf{Eval MASE} \\
 \midrule
 Baseline & .1185 & .1185 & .1190 & .1194 & .1179 & .1187 & .0005 & 0.8784 \\
-\textbf{HD10 (ours)} & .1144 & .1170 & .1155 & .1172 & .1155 & \textbf{.1159} & .0010 & \textbf{0.8443} \\
+\textbf{\texttt{d4\_dropout} (ours)} & .1144 & .1170 & .1155 & .1172 & .1155 & \textbf{.1159} & .0010 & \textbf{0.8443} \\
 Zero & .1186 & .1188 & .1184 & .1188 & .1187 & .1187 & .0002 & 0.8937 \\
 Duplicate & .1192 & .1193 & .1185 & .1197 & .1182 & .1190 & .0006 & 0.8860 \\
 MSHD10 & .1147 & --- & .1145 & .1145 & --- & .1146 & .0001 & 0.8378$^\dagger$ \\
 \midrule
-\multicolumn{2}{l}{\textbf{HD10 $\Delta$\% vs BL}} & & & & & $-2.4\%$ & & $-3.9\%$ \\
+\multicolumn{2}{l}{\textbf{\texttt{d4\_dropout} $\Delta$\% vs BL}} & & & & & $-2.4\%$ & & $-3.9\%$ \\
 \bottomrule
 \end{tabular}
 \\[2pt]
@@ -402,7 +390,7 @@ MSHD10 & .1147 & --- & .1145 & .1145 & --- & .1146 & .0001 & 0.8378$^\dagger$ \\
 
 \begin{table}[h]
 \centering
-\caption{Train loss vs eval MASE improvement (5-seed mean, HD10 over baseline). The eval improvement consistently exceeds the training loss improvement, indicating a regularization effect.}
+\caption{Train loss vs eval MASE improvement (5-seed mean, \texttt{d4\_dropout} over baseline). The eval improvement consistently exceeds the training loss improvement, indicating a regularization effect.}
 \small
 \begin{tabular}{lccc}
 \toprule
@@ -419,7 +407,7 @@ MSHD10 & .1147 & --- & .1145 & .1145 & --- & .1146 & .0001 & 0.8378$^\dagger$ \\
 \label{app:capacity}
 %==============================================================================
 
-The Zero and Duplicate conditions serve as capacity controls: they have the \emph{same architecture and parameter count} as HD10, differing only in the content of the extra channel.
+The Zero and Duplicate conditions serve as capacity controls: they have the \emph{same architecture and parameter count} as \texttt{d4\_dropout}, differing only in the content of the extra channel.
 
 \subsection{5-Seed Results at 10K Steps}
 
@@ -427,23 +415,23 @@ The Zero and Duplicate conditions serve as capacity controls: they have the \emp
 \centering
 \caption{Capacity control experiments (5 seeds, $\eta = 10^{-3}$, 10K steps). Same architecture width, different channel content.}
 \small
-\begin{tabular}{lccccc}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Method} & \textbf{Content} & \textbf{Mean MASE} & \textbf{Std} & \textbf{Wins/485} & \textbf{$p$} \\
+\textbf{Method} & \textbf{Content} & \textbf{Mean MASE} & \textbf{Std} & \textbf{Wins/485} \\
 \midrule
-\textbf{HD10} & Chebyshev $T_4(B^{16})$ & \textbf{0.8368} & 0.0083 & \textbf{329} & $1.5 \times 10^{-15}$ \\
-Zero & All zeros & 0.8578 & 0.0102 & 262 & 0.042 \\
-Baseline & No extra channel & 0.8617 & 0.0062 & --- & --- \\
-Duplicate & Copy of input & 0.8650 & 0.0081 & 217 & 0.99 \\
+\textbf{\texttt{d4\_dropout}} & Chebyshev $T_4(B^{16})$ & \textbf{0.8368} & 0.0083 & \textbf{329} \\
+Zero & All zeros & 0.8578 & 0.0102 & 262 \\
+Baseline & No extra channel & 0.8617 & 0.0062 & --- \\
+Duplicate & Copy of input & 0.8650 & 0.0081 & 217 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{itemize}
     \item \textbf{Duplicate channel hurts}: win rate 44.7\%, \emph{worse} than the 50\% expected by chance.
-    \item \textbf{Zero channel is neutral}: win rate 54.0\%, marginally significant ($p = 0.042$) but tiny effect ($-0.45\%$).
-    \item \textbf{HD10 vs.\ Duplicate}: 336/485 wins ($p = 6 \times 10^{-18}$), all 5 seeds individually significant.
-    \item \textbf{HD10 vs.\ Zero}: 323/485 wins ($p = 1.1 \times 10^{-13}$), 4/5 seeds individually significant.
+    \item \textbf{Zero channel is neutral}: win rate 54.0\%, tiny effect ($-0.45\%$).
+    \item \textbf{\texttt{d4\_dropout} vs.\ Duplicate}: 336/485 wins (\texttt{d4\_dropout} beats Duplicate on every seed).
+    \item \textbf{\texttt{d4\_dropout} vs.\ Zero}: 323/485 wins (\texttt{d4\_dropout} beats Zero on every seed).
 \end{itemize}
 
 \subsection{5-Seed Results at 100K Steps}
@@ -455,7 +443,7 @@ At 100K steps, the capacity controls that were near-neutral at 10K now actively 
 \label{app:ablations}
 %==============================================================================
 
-All ablations use seed 0 with 10\% hint dropout unless otherwise noted; the polynomial-degree sweep is the exception and is reported over $5$ seeds each.
+All ablations use seed 0 with 10\% channel dropout unless otherwise noted; the polynomial-degree sweep is the exception and is reported over $5$ seeds each.
 
 \subsection{Polynomial Degree (Chebyshev, $s=16$, 10\% dropout)}
 
@@ -506,39 +494,39 @@ Stride $s=16$ (equal to patch size $P$) is optimal: filter taps align exactly wi
 \begin{table}[h]
 \centering
 \small
-\begin{tabular}{lcccccc}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Basis} & \textbf{MASE} & \textbf{$\Delta$\%} & \textbf{Wins vs BL} & \textbf{$p$} & \textbf{vs Cheby} & \textbf{$p$} \\
+\textbf{Basis} & \textbf{MASE} & \textbf{$\Delta$\%} & \textbf{Wins vs BL} & \textbf{Wins vs Cheby} \\
 \midrule
-\textbf{Chebyshev} & \textbf{0.8234} & $\mathbf{-4.99\%}$ & 66/97 & $2.5 \times 10^{-4}$ & --- & --- \\
-EMA & 0.8329 & $-3.89\%$ & 65/97 & $5.3 \times 10^{-4}$ & 41/97 & 0.077 \\
-Legendre $d=4$ & 0.8400 & $-3.07\%$ & 62/97 & $4.0 \times 10^{-3}$ & 30/97 & $<$0.001 \\
-Legendre $d=6$ & 0.8397 & $-3.10\%$ & 64/97 & $1.1 \times 10^{-3}$ & 50/97 & 0.42 \\
-Finite Diff & 0.8569 & $-1.12\%$ & 54/97 & 0.16 & 29/97 & $<$0.001 \\
-Duplicate & 0.8583 & $-0.96\%$ & 42/97 & 0.11 & 27/97 & $<$0.001 \\
+\textbf{Chebyshev} & \textbf{0.8234} & $\mathbf{-4.99\%}$ & 66/97 & --- \\
+EMA & 0.8329 & $-3.89\%$ & 65/97 & 41/97 \\
+Legendre $d=4$ & 0.8400 & $-3.07\%$ & 62/97 & 30/97 \\
+Legendre $d=6$ & 0.8397 & $-3.10\%$ & 64/97 & 50/97 \\
+Finite Diff & 0.8569 & $-1.12\%$ & 54/97 & 29/97 \\
+Duplicate & 0.8583 & $-0.96\%$ & 42/97 & 27/97 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Hint Dropout Rate (Chebyshev $d=4$, $s=16$)}
+\subsection{Channel Dropout Rate (Chebyshev $d=4$, $s=16$)}
 
 \begin{table}[h]
 \centering
 \small
-\begin{tabular}{ccccc}
+\begin{tabular}{cccc}
 \toprule
-\textbf{Dropout} & \textbf{MASE} & \textbf{$\Delta$\% vs BL} & \textbf{Wins/97} & \textbf{$p$} \\
+\textbf{Dropout} & \textbf{MASE} & \textbf{$\Delta$\% vs BL} & \textbf{Wins/97} \\
 \midrule
-0\% (HD0)$^\dagger$ & 0.8378 & $-3.5\%$ & --- & --- \\
-2\% & 0.8388 & $-3.20\%$ & 63 & 0.004 \\
-3\% & 0.8497 & $-1.95\%$ & 55 & 0.22 \\
-\textbf{10\%} & \textbf{0.8234} & $\mathbf{-4.99\%}$ & \textbf{66} & \textbf{0.0005} \\
-20\% & 0.8422 & $-2.81\%$ & 67 & 0.0002 \\
-30\% & 0.8559 & $-1.23\%$ & 61 & 0.014 \\
+0\% (\texttt{d4})$^\dagger$ & 0.8378 & $-3.5\%$ & --- \\
+2\% & 0.8388 & $-3.20\%$ & 63 \\
+3\% & 0.8497 & $-1.95\%$ & 55 \\
+\textbf{10\%} & \textbf{0.8234} & $\mathbf{-4.99\%}$ & \textbf{66} \\
+20\% & 0.8422 & $-2.81\%$ & 67 \\
+30\% & 0.8559 & $-1.23\%$ & 61 \\
 \bottomrule
 \end{tabular}
 \\[2pt]
-{\footnotesize $^\dagger$HD0 MASE is the 5-seed mean. HD0 and HD10 are essentially tied; dropout helps marginally.}
+{\footnotesize $^\dagger$\texttt{d4} MASE is the 5-seed mean. \texttt{d4} and \texttt{d4\_dropout} are essentially tied; dropout helps marginally.}
 \end{table}
 
 \subsection{Learned FIR Coefficients (seed 0)}
@@ -557,7 +545,7 @@ Fixed Chebyshev & $[0, -2, 0, 0.5]$ (not learned) & 0.8234 & $-4.99\%$ \\
 \end{tabular}
 \end{table}
 
-The two learned filters converge to distinct basins (high-pass vs.\ smoothing). Both beat the baseline but are slightly worse than fixed Chebyshev (51/97 h2h, $p=0.34$).
+The two learned filters converge to distinct basins (high-pass vs.\ smoothing). Both beat the baseline but are slightly worse than fixed Chebyshev (51/97 head-to-head wins for fixed).
 
 \subsection{Latent Preconditioning (seed 0)}
 
@@ -570,7 +558,7 @@ Applying the polynomial filter \emph{after} the input projection (in latent spac
 \toprule
 \textbf{Method} & \textbf{Filter location} & \textbf{MASE} & \textbf{vs BL} \\
 \midrule
-HD10 (input-level) & Before patching & 0.8234 & $-4.99\%$ \\
+\texttt{d4\_dropout} (input-level) & Before patching & 0.8234 & $-4.99\%$ \\
 Latent $s=1$ & After input projection & 1.1538 & $+33.1\%$ \\
 Latent $s=4$ & After input projection & 1.2243 & $+41.3\%$ \\
 \bottomrule
@@ -586,21 +574,21 @@ Latent preconditioning is catastrophic. The filter must operate on the raw time 
 
 \begin{table}[h]
 \centering
-\caption{Domain analysis (HD10 vs BL, 5 seeds pooled, 485 observations).}
+\caption{Domain analysis (\texttt{d4\_dropout} vs BL, 5 seeds pooled, 485 observations).}
 \small
-\begin{tabular}{lccccc}
+\begin{tabular}{lccc}
 \toprule
-\textbf{Domain} & \textbf{$n$} & \textbf{$\Delta$\%} & \textbf{Wins} & \textbf{$p$} \\
+\textbf{Domain} & \textbf{$n$} & \textbf{$\Delta$\%} & \textbf{Wins} \\
 \midrule
-Demographics & 15 & $+9.83\%$ & 13/15 & 0.004 \\
-Transport & 55 & $+6.94\%$ & 47/55 & $4 \times 10^{-8}$ \\
-Energy & 80 & $+3.97\%$ & 56/80 & $2 \times 10^{-4}$ \\
-M4 Competition & 30 & $+3.83\%$ & 23/30 & 0.003 \\
-IT/Cloud & 120 & $+2.23\%$ & 81/120 & $8 \times 10^{-5}$ \\
-ETT (Industrial) & 80 & $+1.50\%$ & 54/80 & 0.001 \\
-Retail/Sales & 20 & $+0.85\%$ & 14/20 & 0.058 \\
-Weather & 75 & $+0.34\%$ & 36/75 & 0.678 \\
-Healthcare & 10 & $+0.24\%$ & 5/10 & 0.623 \\
+Demographics & 15 & $+9.83\%$ & 13/15 \\
+Transport & 55 & $+6.94\%$ & 47/55 \\
+Energy & 80 & $+3.97\%$ & 56/80 \\
+M4 Competition & 30 & $+3.83\%$ & 23/30 \\
+IT/Cloud & 120 & $+2.23\%$ & 81/120 \\
+ETT (Industrial) & 80 & $+1.50\%$ & 54/80 \\
+Retail/Sales & 20 & $+0.85\%$ & 14/20 \\
+Weather & 75 & $+0.34\%$ & 36/75 \\
+Healthcare & 10 & $+0.24\%$ & 5/10 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -609,24 +597,75 @@ The benefit is consistent with the mechanism: at stride $s=16$ and patch size $P
 
 \begin{table}[h]
 \centering
-\caption{Frequency analysis (HD10 vs BL, 5 seeds pooled).}
+\caption{Frequency analysis (\texttt{d4\_dropout} vs BL, 5 seeds pooled).}
 \small
-\begin{tabular}{lccccc}
+\begin{tabular}{lccc}
 \toprule
-\textbf{Frequency} & \textbf{$n$} & \textbf{$\Delta$\%} & \textbf{Wins} & \textbf{$p$} \\
+\textbf{Frequency} & \textbf{$n$} & \textbf{$\Delta$\%} & \textbf{Wins} \\
 \midrule
-Sub-hourly & 180 & $+3.40\%$ & 121/180 & $2 \times 10^{-6}$ \\
-Hourly & 155 & $+3.80\%$ & 113/155 & $5 \times 10^{-9}$ \\
-Daily & 75 & $+0.76\%$ & 46/75 & 0.032 \\
-Weekly & 40 & $+0.73\%$ & 29/40 & 0.003 \\
-Monthly & 25 & $+3.41\%$ & 13/25 & 0.50 \\
-Quarterly & 5 & $+0.24\%$ & 3/5 & 0.50 \\
-Yearly & 5 & $+5.92\%$ & 4/5 & 0.19 \\
+Sub-hourly & 180 & $+3.40\%$ & 121/180 \\
+Hourly & 155 & $+3.80\%$ & 113/155 \\
+Daily & 75 & $+0.76\%$ & 46/75 \\
+Weekly & 40 & $+0.73\%$ & 29/40 \\
+Monthly & 25 & $+3.41\%$ & 13/25 \\
+Quarterly & 5 & $+0.24\%$ & 3/5 \\
+Yearly & 5 & $+5.92\%$ & 4/5 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Prediction horizon.} The benefit increases with prediction length: $+1.4\%$ for short horizons to $+5.1\%$ for long horizons. Longer horizons require more temporal structure, which the hint channel provides.
+\paragraph{Prediction horizon.} The benefit increases with prediction length: $+1.4\%$ for short horizons to $+5.1\%$ for long horizons. Longer horizons require more temporal structure, which the preconditioning channel provides.
+
+%==============================================================================
+\section{Horizon Analysis: \texttt{d4} vs \texttt{d4\_dropout}}
+\label{app:horizon}
+%==============================================================================
+
+The preconditioning filter for \texttt{d4}/\texttt{d4\_dropout} ($d{=}4$, $s{=}16$) reduces to $\tilde h[t] = -x[t-32] + (1/8)\, x[t-64]$. At inference, GIFT-Eval pads the prediction window with zeros before the first decode pass, so for a predicted position $t$ each lag $x[t-ks]$ is real if $t - ks$ falls in the context window and zero otherwise; for $\texttt{prediction\_length} > \texttt{num\_predict\_token}$ the model is unrolled in chunks and the lags in the second and later chunks are populated by the model's own predictions. The threshold below which the preconditioned signal is fully real is $d \cdot s = 64$ steps. We test whether \texttt{d4\_dropout}'s channel-dropout regularisation buys robustness on long horizons that \texttt{d4} lacks.
+
+We compute, for each of $97$ GIFT-Eval configs and each of $5$ seeds, normalised MASE for Baseline, \texttt{d4} (Chebyshev $d=4$, $s=16$, no dropout), and \texttt{d4\_dropout} (same with $10\%$ patch-level channel dropout). Each bin's reported MASE is the cross-seed mean of the per-seed cross-config geometric mean. $\Delta\%$ is relative to the same-bin Baseline. ``Wins'' counts configs (out of bin $n$) where the method's 5-seed mean beats the Baseline's; ``\texttt{d4} better than \texttt{d4\_dropout}'' counts configs where \texttt{d4}'s 5-seed mean beats \texttt{d4\_dropout}'s.
+
+\begin{table}[h]
+\centering
+\caption{\texttt{d4} vs \texttt{d4\_dropout} vs Baseline by GIFT-Eval term. Bold marks the better of \texttt{d4}/\texttt{d4\_dropout} in each bin.}
+\small
+\begin{tabular}{lccccccc}
+\toprule
+\textbf{Bin} & \textbf{$n$} & \textbf{BL} & \textbf{\texttt{d4}} & \textbf{\texttt{d4\_dropout}} & \textbf{\texttt{d4} $\Delta\%$} & \textbf{\texttt{d4\_dropout} $\Delta\%$} & \textbf{\texttt{d4} better than \texttt{d4\_dropout}} \\
+\midrule
+short  & 55 & 0.8403 & \textbf{0.8252} & 0.8282 & $-1.79\%$ & $-1.44\%$ & $24/55$ \\
+medium & 21 & 0.8592 & 0.8301 & \textbf{0.8231} & $-3.39\%$ & $-4.20\%$ & $9/21$ \\
+long   & 21 & 0.9237 & 0.8802 & \textbf{0.8744} & $-4.71\%$ & $-5.34\%$ & $7/21$ \\
+\midrule
+ALL    & 97 & 0.8618 & 0.8379 & \textbf{0.8368} & $-2.77\%$ & $-2.90\%$ & $40/97$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{\texttt{d4} vs \texttt{d4\_dropout} vs Baseline by raw prediction-length bin (the GIFT-Eval PL distribution has no configs in $(64, 200]$, so we bin around the natural clusters of the benchmark and the $d\cdot s = 64$ mismatch threshold).}
+\small
+\begin{tabular}{lccccccc}
+\toprule
+\textbf{Bin} & \textbf{$n$} & \textbf{BL} & \textbf{\texttt{d4}} & \textbf{\texttt{d4\_dropout}} & \textbf{\texttt{d4} $\Delta\%$} & \textbf{\texttt{d4\_dropout} $\Delta\%$} & \textbf{\texttt{d4} better than \texttt{d4\_dropout}} \\
+\midrule
+$\text{PL} \le 32$       & 30 & 1.0237 & \textbf{1.0074} & 1.0098 & $-1.59\%$ & $-1.36\%$ & $10/30$ \\
+$32 < \text{PL} \le 64$  & 25 & 0.6631 & \textbf{0.6496} & 0.6529 & $-2.04\%$ & $-1.55\%$ & $14/25$ \\
+$480 \le \text{PL} \le 600$ & 21 & 0.8592 & 0.8301 & \textbf{0.8231} & $-3.39\%$ & $-4.20\%$ & $9/21$ \\
+$\text{PL} \ge 720$      & 21 & 0.9237 & 0.8802 & \textbf{0.8744} & $-4.71\%$ & $-5.34\%$ & $7/21$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/horizon_analysis.pdf}
+\caption{(a) Per-bin $\Delta\%$ vs Baseline for \texttt{d4} (no dropout) and \texttt{d4\_dropout} (10\% dropout). \texttt{d4} is comparable on short horizons but trails \texttt{d4\_dropout} on medium/long. (b) Per-config $\text{\texttt{d4}} - \text{\texttt{d4\_dropout}}$ MASE gap (as a percentage of \texttt{d4\_dropout}) plotted against prediction length on a log axis; positive values mean \texttt{d4\_dropout} wins. The dashed line marks the $d \cdot s = 64$ threshold below which the preconditioned signal is fully computable from context. Bin means with $\pm 1$ standard error are red.}
+\label{fig:horizon-analysis}
+\end{figure}
+
+\paragraph{What the data say.} The direction of the \texttt{d4}--\texttt{d4\_dropout} gap is consistent with the train/inference mismatch story: across the $d \cdot s = 64$ threshold the gap flips from slightly favouring \texttt{d4} ($-0.36\%$ overall on short, $-0.50\%$ on $32 < \text{PL} \le 64$) to favouring \texttt{d4\_dropout} ($+0.85\%$ on medium, $+0.66\%$ on long). However, the magnitude is small ($\le 0.85\%$ relative MASE) compared to the $\sim 4$--$5\%$ HD-vs-Baseline gap on the same long horizons. Most of the polynomial-preconditioning benefit transfers from training to inference even without dropout. The practical implication is that \texttt{d4\_dropout} is the safer default---especially since long horizons are precisely where the polynomial-preconditioning effect is largest in absolute terms---but the size of the dropout-mismatch effect alone does not motivate adopting \texttt{d4\_dropout} over \texttt{d4} in isolation.
 
 %==============================================================================
 \section{Context Length}
@@ -639,7 +678,7 @@ Yearly & 5 & $+5.92\%$ & 4/5 & 0.19 \\
 \small
 \begin{tabular}{ccccc}
 \toprule
-\textbf{Context} & \textbf{BL} & \textbf{HD10} & \textbf{$\Delta$\%} & \textbf{Wins/97} \\
+\textbf{Context} & \textbf{BL} & \textbf{\texttt{d4\_dropout}} & \textbf{$\Delta$\%} & \textbf{Wins/97} \\
 \midrule
 512 & 0.9432 & 0.8986 & $-4.73\%$ & 62 \\
 1,000 & 0.9166 & 0.8706 & $-5.02\%$ & 65 \\
@@ -649,46 +688,47 @@ Yearly & 5 & $+5.92\%$ & 4/5 & 0.19 \\
 \end{tabular}
 \end{table}
 
-Notably, HD10 at context length 2,000 (MASE 0.8331) outperforms the baseline at context length 4,000 (MASE 0.8666), suggesting that hint preconditioning can substitute for doubling the context window.
+Notably, \texttt{d4\_dropout} at context length 2,000 (MASE 0.8331) outperforms the baseline at context length 4,000 (MASE 0.8666), suggesting that input preconditioning can substitute for doubling the context window.
 
 %==============================================================================
 \section{Matched Learning Rate}
 \label{app:matchedlr}
 %==============================================================================
 
-The baseline is sensitive to learning rate: increasing to $\eta = 2 \times 10^{-3}$ improves it by 2.3\% (from 0.8617 to 0.8422). HD10 is insensitive (0.1\% difference: 0.8368 at $10^{-3}$ vs.\ 0.8361 at $2 \times 10^{-3}$).
+The baseline is sensitive to learning rate: increasing to $\eta = 2 \times 10^{-3}$ improves it by 2.3\% (from 0.8617 to 0.8422). \texttt{d4\_dropout} is insensitive (0.1\% difference: 0.8368 at $10^{-3}$ vs.\ 0.8361 at $2 \times 10^{-3}$).
 
 \begin{table}[h]
 \centering
 \caption{Matched learning rate comparison ($\eta = 2 \times 10^{-3}$, 5 seeds, 485 comparisons).}
 \small
-\begin{tabular}{cccccc}
+\begin{tabular}{ccccc}
 \toprule
-\textbf{Seed} & \textbf{BL@2e-3} & \textbf{HD10@2e-3} & \textbf{$\Delta$\%} & \textbf{Wins/97} & \textbf{$p$-value} \\
+\textbf{Seed} & \textbf{BL@2e-3} & \textbf{\texttt{d4\_dropout}@2e-3} & \textbf{$\Delta$\%} & \textbf{Wins/97} \\
 \midrule
-0 & 0.8424 & 0.8339 & $+1.01\%$ & 57 & 0.052 \\
-1 & 0.8442 & 0.8338 & $+1.23\%$ & 55 & 0.111 \\
-2 & 0.8378 & 0.8468 & $-1.07\%$ & 46 & 0.729 \\
-7 & 0.8339 & 0.8350 & $-0.13\%$ & 54 & 0.155 \\
-42 & 0.8526 & 0.8307 & $+2.55\%$ & 68 & $4.7 \times 10^{-5}$ \\
+0 & 0.8424 & 0.8339 & $+1.01\%$ & 57 \\
+1 & 0.8442 & 0.8338 & $+1.23\%$ & 55 \\
+2 & 0.8378 & 0.8468 & $-1.07\%$ & 46 \\
+7 & 0.8339 & 0.8350 & $-0.13\%$ & 54 \\
+42 & 0.8526 & 0.8307 & $+2.55\%$ & 68 \\
 \midrule
-\textbf{Pooled} & \textbf{0.8422} & \textbf{0.8361} & \textbf{$+0.72\%$} & \textbf{280/485} & $\mathbf{3.8 \times 10^{-4}}$ \\
+\textbf{Mean} & \textbf{0.8422} & \textbf{0.8361} & \textbf{$+0.72\%$} & \textbf{280/485} \\
+\textbf{Std}  & $0.0071$ & $0.0062$ & $1.38\%$ & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}[h]
 \centering
-\caption{LR $\times$ method interaction (5-seed mean MASE). HD10 provides two benefits: optimization stability (LR-insensitive) and genuine inductive bias ($+0.72\%$ at matched optimal LR).}
+\caption{LR $\times$ method interaction (5-seed mean MASE). \texttt{d4\_dropout} provides two benefits: optimization stability (LR-insensitive) and genuine inductive bias ($+0.72\%$ at matched optimal LR).}
 \small
 \begin{tabular}{lccc}
 \toprule
 & $\eta = 10^{-3}$ & $\eta = 2 \times 10^{-3}$ & LR sensitivity \\
 \midrule
 Baseline & 0.8617 & 0.8422 & 2.27\% \\
-HD10 (Ours) & 0.8368 & 0.8361 & 0.09\% \\
+\texttt{d4\_dropout} (Ours) & 0.8368 & 0.8361 & 0.09\% \\
 \midrule
-HD10 vs BL & $-2.89\%$ $(p < 10^{-15})$ & $-0.72\%$ $(p = 3.8 \times 10^{-4})$ & \\
+\texttt{d4\_dropout} vs BL & $-2.89\%$ ($329/485$ wins) & $-0.72\%$ ($280/485$ wins) & \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -698,41 +738,42 @@ HD10 vs BL & $-2.89\%$ $(p < 10^{-15})$ & $-0.72\%$ $(p = 3.8 \times 10^{-4})$ &
 \label{app:multiscale}
 %==============================================================================
 
-We test two multi-scale variants that provide two hint channels (degree 4 + degree 6):
+We test two multi-scale variants that provide two preconditioning channels (degree 4 + degree 6):
 
 \begin{table}[h]
 \centering
 \caption{Multi-scale variants (5 seeds, $\eta = 10^{-3}$, 10K steps).}
 \small
-\begin{tabular}{lccccc}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Method} & \textbf{Mean} & \textbf{Std} & \textbf{vs BL} & \textbf{Wins/485} & \textbf{$p$} \\
+\textbf{Method} & \textbf{Mean} & \textbf{Std} & \textbf{vs BL} & \textbf{Wins/485} \\
 \midrule
-HD10 (d=4, 10\% drop) & 0.8368 & 0.0083 & $-2.89\%$ & 329 & $1.5 \times 10^{-15}$ \\
-MS46 (d=4+6, 0\% drop) & 0.8434 & 0.0123 & $-2.13\%$ & 330 & $6.8 \times 10^{-16}$ \\
-MSHD10 (d=4+6, 10\% drop) & 0.8437 & 0.0072 & $-2.09\%$ & 315 & $2.2 \times 10^{-11}$ \\
+\texttt{d4\_dropout} (d=4, 10\% drop) & 0.8368 & 0.0083 & $-2.89\%$ & 329 \\
+MS46 (d=4+6, 0\% drop) & 0.8434 & 0.0123 & $-2.13\%$ & 330 \\
+MSHD10 (d=4+6, 10\% drop) & 0.8437 & 0.0072 & $-2.09\%$ & 315 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All three methods are statistically indistinguishable head-to-head (HD10 vs MS46: 251/485, $p=0.47$; HD10 vs MSHD10: 257/485, $p=0.20$). MSHD10 has the lowest cross-seed standard deviation (0.0072 vs HD10's 0.0083).
+All three methods are essentially tied head-to-head (\texttt{d4\_dropout} vs MS46: 251/485 wins; \texttt{d4\_dropout} vs MSHD10: 257/485 wins; both close to the 50\% chance line). MSHD10 has the lowest cross-seed standard deviation (0.0072 vs \texttt{d4\_dropout}'s 0.0083).
 
 \paragraph{MSHD10 per-seed results:}
 
 \begin{table}[h]
 \centering
 \small
-\begin{tabular}{cccccc}
+\begin{tabular}{cccc}
 \toprule
-\textbf{Seed} & \textbf{MASE} & \textbf{$\Delta$\%} & \textbf{Wins/97} & \textbf{$p$} \\
+\textbf{Seed} & \textbf{MASE} & \textbf{$\Delta$\%} & \textbf{Wins/97} \\
 \midrule
-0 & 0.8555 & $-1.28\%$ & 54 & 0.31 \\
-1 & 0.8342 & $-1.89\%$ & 62 & 0.008 \\
-2 & 0.8447 & $-2.12\%$ & 64 & 0.002 \\
-7 & 0.8453 & $-2.57\%$ & 73 & $6 \times 10^{-7}$ \\
-42 & 0.8388 & $-2.61\%$ & 62 & 0.008 \\
+0 & 0.8555 & $-1.28\%$ & 54 \\
+1 & 0.8342 & $-1.89\%$ & 62 \\
+2 & 0.8447 & $-2.12\%$ & 64 \\
+7 & 0.8453 & $-2.57\%$ & 73 \\
+42 & 0.8388 & $-2.61\%$ & 62 \\
 \midrule
-\textbf{Pooled} & --- & $-2.09\%$ & 315/485 & $4.5 \times 10^{-11}$ \\
+\textbf{Mean} & $0.8437$ & $-2.09\%$ & 315/485 \\
+\textbf{Std}  & $0.0072$ & $0.49\%$ & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -744,44 +785,44 @@ All three methods are statistically indistinguishable head-to-head (HD10 vs MS46
 
 \begin{table}[h]
 \centering
-\caption{Full 100K training budget with capacity controls (5 seeds). HD10 vs BL: $+3.9\%$; HD10 vs Dup: $+4.7\%$; HD10 vs Zero: $+5.5\%$.}
+\caption{Full 100K training budget with capacity controls (5 seeds). \texttt{d4\_dropout} vs BL: $+3.9\%$; \texttt{d4\_dropout} vs Dup: $+4.7\%$; \texttt{d4\_dropout} vs Zero: $+5.5\%$.}
 \small
 \begin{tabular}{lcccccc}
 \toprule
 & \textbf{s0} & \textbf{s1} & \textbf{s2} & \textbf{s7} & \textbf{s42} & \textbf{Mean} \\
 \midrule
 Baseline & 0.9092 & 0.8920 & 0.8633 & 0.8641 & 0.8636 & 0.8784 \\
-\textbf{HD10} & \textbf{0.8349} & \textbf{0.8402} & 0.8586 & \textbf{0.8450} & \textbf{0.8430} & \textbf{0.8443} \\
+\textbf{\texttt{d4\_dropout}} & \textbf{0.8349} & \textbf{0.8402} & 0.8586 & \textbf{0.8450} & \textbf{0.8430} & \textbf{0.8443} \\
 MSHD10 & 0.8266 & --- & \textbf{0.8432} & 0.8437 & --- & 0.8378$^\dagger$ \\
 Duplicate & 0.8887 & 0.8740 & 0.8974 & 0.8794 & 0.8903 & 0.8860 \\
 Zero & 0.8917 & 0.8585 & 0.8750 & 0.8825 & 0.9610 & 0.8937 \\
 \midrule
-HD10 $\Delta$\% vs BL & $-8.2\%$ & $-5.8\%$ & $-0.5\%$ & $-2.2\%$ & $-2.4\%$ & $-3.9\%$ \\
+\texttt{d4\_dropout} $\Delta$\% vs BL & $-8.2\%$ & $-5.8\%$ & $-0.5\%$ & $-2.2\%$ & $-2.4\%$ & $-3.9\%$ \\
 \bottomrule
 \end{tabular}
 \\[2pt]
 {\footnotesize $^\dagger$MSHD10 mean over 3 available seeds (0, 2, 7).}
 \end{table}
 
-Two findings stand out. First, the benefit of polynomial hints \emph{grows} with training budget: HD10 improves by 3.9\% at 100K (vs.\ 2.9\% at 10K). Second, the capacity controls that were near-neutral at 10K now actively hurt: Duplicate degrades by 0.9\% and Zero by 1.7\%. The baseline shows higher variance across seeds at 100K (seed 0 reaches 0.9092 due to late-training instability), while HD10 remains stable (range 0.83--0.86).
+Two findings stand out. First, the benefit of polynomial preconditioning \emph{grows} with training budget: \texttt{d4\_dropout} improves by 3.9\% at 100K (vs.\ 2.9\% at 10K). Second, the capacity controls that were near-neutral at 10K now actively hurt: Duplicate degrades by 0.9\% and Zero by 1.7\%. The baseline shows higher variance across seeds at 100K (seed 0 reaches 0.9092 due to late-training instability), while \texttt{d4\_dropout} remains stable (range 0.83--0.86).
 
 %==============================================================================
 \section{Inference-Time Ablation}
 \label{app:inference}
 %==============================================================================
 
-A model trained with Chebyshev hints (HD10) is evaluated with different hint content at inference time:
+A model trained with Chebyshev preconditioning (\texttt{d4\_dropout}) is evaluated with different channel content at inference time:
 
 \begin{table}[h]
 \centering
-\caption{Inference-time content ablation (seed 0, HD10 model). The ordering confirms the model has learned to exploit specific polynomial structure.}
+\caption{Inference-time content ablation (seed 0, \texttt{d4\_dropout} model). The ordering confirms the model has learned to exploit specific polynomial structure.}
 \small
 \begin{tabular}{lcc}
 \toprule
-\textbf{Inference hint content} & \textbf{MASE} & \textbf{vs Normal} \\
+\textbf{Inference channel content} & \textbf{MASE} & \textbf{vs Normal} \\
 \midrule
 Normal (Chebyshev) & 0.8234 & --- \\
-No hint channel (Baseline arch) & 0.8666 & $+5.2\%$ \\
+No preconditioning channel (Baseline arch) & 0.8666 & $+5.2\%$ \\
 Zeros & 0.9003 & $+9.3\%$ \\
 Random Gaussian noise & 0.9427 & $+14.5\%$ \\
 Duplicate (copy of input) & 1.0699 & $+29.9\%$ \\
@@ -789,26 +830,26 @@ Duplicate (copy of input) & 1.0699 & $+29.9\%$ \\
 \end{tabular}
 \end{table}
 
-The ordering Normal $\gg$ Baseline $>$ Zero $>$ Random $>$ Duplicate confirms that the model has learned to exploit the specific polynomial structure. Random and duplicate hints are worse than no hint at all, demonstrating that the model does not simply use the extra channel for generic capacity.
+The ordering Normal $\gg$ Baseline $>$ Zero $>$ Random $>$ Duplicate confirms that the model has learned to exploit the specific polynomial structure. Random and duplicate channels are worse than no preconditioning at all, demonstrating that the model does not simply use the extra channel for generic capacity.
 
-\paragraph{Zero-hint dependence vs dropout rate.} Models trained with different hint dropout rates, evaluated with hints replaced by zeros:
+\paragraph{Zeroed-channel dependence vs dropout rate.} Models trained with different channel dropout rates, evaluated with preconditioning replaced by zeros:
 
 \begin{table}[h]
 \centering
 \small
 \begin{tabular}{ccccc}
 \toprule
-\textbf{Train dropout} & \textbf{Normal MASE} & \textbf{Zero-hint MASE} & \textbf{Degradation} \\
+\textbf{Train dropout} & \textbf{Normal MASE} & \textbf{Zeroed-channel MASE} & \textbf{Degradation} \\
 \midrule
 0\% (MS46) & 0.8534 & 1.1594 & $+35.9\%$ \\
 2\% & 0.8388 & 0.8996 & $+7.2\%$ \\
-10\% (HD10) & 0.8234 & 0.9003 & $+9.3\%$ \\
+10\% (\texttt{d4\_dropout}) & 0.8234 & 0.9003 & $+9.3\%$ \\
 30\% & 0.8559 & 0.8769 & $+2.5\%$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Without dropout, the model is catastrophically dependent on hints (36\% degradation). With 10\% dropout, degradation is moderate (9\%). With 30\%, the model barely uses hints (2.5\% degradation but weaker overall).
+Without dropout, the model is catastrophically dependent on the preconditioning channel (36\% degradation). With 10\% dropout, degradation is moderate (9\%). With 30\%, the model barely uses preconditioning (2.5\% degradation but weaker overall).
 
 %==============================================================================
 \section{Comparison to Official Moirai 2.0}
@@ -827,37 +868,67 @@ Our retrained baseline differs from the official Moirai 2.0-R-Small release due 
 \midrule
 Official Moirai 2.0-R-Small (HF) & 0.7280 & 57/97 & Full Salesforce budget \\
 Our BL (5-seed mean, 10K) & 0.8617 & --- & 10K steps \\
-Our HD10 (5-seed mean, 10K) & 0.8368 & --- & 10K steps \\
+Our \texttt{d4\_dropout} (5-seed mean, 10K) & 0.8368 & --- & 10K steps \\
 Our BL (5-seed mean, 100K) & 0.8784 & --- & 100K steps \\
-Our HD10 (5-seed mean, 100K) & 0.8443 & --- & 100K steps \\
+Our \texttt{d4\_dropout} (5-seed mean, 100K) & 0.8443 & --- & 100K steps \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The gap between our retrained models and the official release is expected and does \emph{not} diminish our findings. The official Moirai 2.0 was trained with Salesforce's full compute budget (details not fully disclosed), while our retraining uses only 10K--100K steps. Our experiments are designed as controlled comparisons: all conditions (Baseline, HD10, Zero, Duplicate) use identical training settings, data, and compute. The relative improvement from hint preconditioning is the relevant finding, not the absolute MASE level.
+The gap between our retrained models and the official release is expected and does \emph{not} diminish our findings. The official Moirai 2.0 was trained with Salesforce's full compute budget (details not fully disclosed), while our retraining uses only 10K--100K steps. Our experiments are designed as controlled comparisons: all conditions (Baseline, \texttt{d4\_dropout}, Zero, Duplicate) use identical training settings, data, and compute. The relative improvement from input preconditioning is the relevant finding, not the absolute MASE level.
 
 %==============================================================================
 \section{FEV-Bench Evaluation}
 \label{app:fevbench}
 %==============================================================================
 
-To verify that our findings generalize beyond GIFT-Eval, we evaluate on FEV-Bench (100 tasks), an independent time series forecasting benchmark.
+To verify that our findings generalize beyond GIFT-Eval, we evaluate on FEV-Bench (100 tasks), an independent time series forecasting benchmark, and reproduce the polynomial-degree sweep over $d \in \{2, \ldots, 8\}$.
 
 \begin{table}[h]
 \centering
-\caption{FEV-Bench results (100 tasks). HD10 wins 72/100 tasks over the baseline.}
+\caption{FEV-Bench headline. \texttt{d4\_dropout} ($d{=}4$) is the 5-seed mean; baseline is single-seed. SQL is FEV-Bench's scaled quantile loss.}
 \small
 \begin{tabular}{lcccc}
 \toprule
 \textbf{Method} & \textbf{Geo Mean MASE} & \textbf{SQL} & \textbf{Wins/100} \\
 \midrule
-\textbf{HD10 (Ours)} & \textbf{1.253} & \textbf{1.657} & \textbf{72/100} \\
-Baseline & 1.284 & 1.679 & --- \\
+\textbf{\texttt{d4\_dropout} (Ours, 5 seeds)} & \textbf{1.2532} & \textbf{1.0236} & \textbf{72/100}$^\dagger$ \\
+Baseline (1 seed) & $1.2908$ & $1.0562$ & --- \\
+\bottomrule
+\end{tabular}
+\\[2pt]
+{\footnotesize $^\dagger$Win count from single-seed \texttt{d4\_dropout} vs single-seed BL; the 5-seed mean MASE matches the single-seed value to within rounding.}
+\end{table}
+
+\texttt{d4\_dropout} improves geometric-mean MASE by $2.91\%$ on FEV-Bench (5-seed mean $1.2532 \pm 0.0064$ vs.\ BL $1.2908$) and SQL by $3.09\%$ ($1.0236 \pm 0.0053$ vs.\ $1.0562$), consistent with the GIFT-Eval improvement and confirming the benefit is not benchmark-specific.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\columnwidth]{figures/fev_degsweep.pdf}
+\caption{FEV-Bench polynomial-degree sweep (5 seeds per $d$, stride $s{=}16$, $10\%$ channel dropout). Errorbars are cross-seed std; dashed line is the single-seed baseline. Every $d \geq 2$ beats baseline; the curve is shallow with $d \in \{4, 6, 8\}$ statistically tied at the optimum, mirroring the GIFT-Eval pattern (Fig.~\ref{fig:degree-sweep}).}
+\label{fig:fev-degree-sweep}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\caption{FEV-Bench polynomial-degree sweep, 5 seeds per degree. $\Delta\%$ relative to the single-seed baseline ($1.2908$).}
+\small
+\begin{tabular}{cccc}
+\toprule
+\textbf{Degree} & \textbf{MASE (mean $\pm$ std)} & \textbf{$\Delta$\% vs BL} & \textbf{SQL (mean $\pm$ std)} \\
+\midrule
+2 & $1.2780 \pm 0.0039$ & $-0.99\%$ & $1.0425 \pm 0.0032$ \\
+3 & $1.2609 \pm 0.0173$ & $-2.32\%$ & $1.0288 \pm 0.0125$ \\
+\textbf{4} & $\mathbf{1.2532 \pm 0.0064}$ & $\mathbf{-2.92\%}$ & $\mathbf{1.0236 \pm 0.0053}$ \\
+5 & $1.2639 \pm 0.0069$ & $-2.08\%$ & $1.0309 \pm 0.0063$ \\
+6 & $1.2521 \pm 0.0068$ & $-3.00\%$ & $1.0236 \pm 0.0060$ \\
+7 & $1.2564 \pm 0.0114$ & $-2.66\%$ & $1.0263 \pm 0.0094$ \\
+8 & $1.2518 \pm 0.0082$ & $-3.02\%$ & $1.0228 \pm 0.0059$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-HD10 improves geometric mean MASE by 2.5\% on FEV-Bench ($+$72/100 task wins), consistent with the 2.9\% improvement on GIFT-Eval. The SQL metric also improves (1.657 vs.\ 1.679). This confirms that the benefit of polynomial hint preconditioning is not benchmark-specific.
+The FEV-Bench degree-sweep reproduces the qualitative GIFT-Eval pattern: every $d \geq 2$ beats baseline, the curve is shallow, and the extreme $d{=}2$ (single non-trivial lag) trails the rest. The benefit transfers cleanly to an independent benchmark.
 
 %==============================================================================
 \section{Matched Official Moirai 2.0 Protocol}
@@ -875,38 +946,13 @@ To verify robustness to training protocol, we train under the official Moirai~2.
 \textbf{Method} & \textbf{s0} & \textbf{s2} & \textbf{s7} & \textbf{Mean} \\
 \midrule
 Baseline (10K warm) & 0.882 & 0.880 & 0.917 & 0.893 \\
-\textbf{HD10 (10K warm)} & \textbf{0.892} & \textbf{0.846} & \textbf{0.880} & \textbf{0.873} \\
+\textbf{\texttt{d4\_dropout} (10K warm)} & \textbf{0.892} & \textbf{0.846} & \textbf{0.880} & \textbf{0.873} \\
 \midrule
 $\Delta$\% & $-1.1\%$ & $+3.9\%$ & $+4.0\%$ & $+2.3\%$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-HD10 improves by 2.3\% over the baseline under the official protocol. The improvement is seed-dependent (s0 is marginal, s2 and s7 show clear gains), but the mean effect is consistent with our standard protocol results ($+2.9\%$ at 10K steps, $+3.9\%$ at 100K steps with 1K warmup). This confirms that the benefit of polynomial hint preconditioning is not an artifact of our training schedule.
-
-%==============================================================================
-\section{Leaderboard Context}
-\label{app:leaderboard}
-%==============================================================================
-
-To contextualize the absolute performance of our method, we compare against published results on the GIFT-Eval leaderboard.
-
-\begin{table}[h]
-\centering
-\caption{GIFT-Eval leaderboard context. HD10 Small (11.4M) surpasses Moirai 1.0 Large (311M) despite $27\times$ fewer parameters.}
-\small
-\begin{tabular}{lccc}
-\toprule
-\textbf{Model} & \textbf{Params} & \textbf{Norm.\ MASE} \\
-\midrule
-Moirai 2.0-R-Small (official) & 11.4M & 0.728 \\
-\textbf{HD10 Small (Ours, 100K)} & \textbf{11.4M} & \textbf{0.828} \\
-Our Baseline (100K, 5-seed) & 11.4M & 0.878 \\
-Moirai 1.0 Large & 311M & 0.875 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Notably, our HD10 Small model (11.4M parameters) achieves normalized MASE of 0.828, surpassing Moirai 1.0 Large (311M parameters, MASE 0.875) despite using $27\times$ fewer parameters. While there remains a gap to the official Moirai 2.0-R-Small (0.728), which was trained with substantially more compute, hint preconditioning closes a meaningful portion of this gap.
+\texttt{d4\_dropout} improves by 2.3\% over the baseline under the official protocol. The improvement is seed-dependent (s0 is marginal, s2 and s7 show clear gains), but the mean effect is consistent with our standard protocol results ($+2.9\%$ at 10K steps, $+3.9\%$ at 100K steps with 1K warmup). This confirms that the benefit of polynomial input preconditioning is not an artifact of our training schedule.
 
 \end{document}

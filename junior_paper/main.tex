@@ -338,8 +338,26 @@ With the Chebyshev minimax property in hand, we can state the USP algorithm of \
 \end{equation}
 The term $\aleph_0$ is the universal preconditioning component: it depends only on the coefficients $c_{1:n}$ (not on $A$, $B$, or $C$) and can be computed from observed outputs alone. The term $\aleph_1$ involves a bounded number of parameters that can be learned via convex regression. The critical term $\aleph_2$ contains $p_n^c(A)$; if $p_n^c$ is chosen to have small supremum on the spectrum of $A$, this error term is small.
 
+Algorithm~\ref{alg:usp-general} states the general USP framework. Any sequence prediction model $f_\theta$ can serve as the base learner: at each round, USP subtracts the preconditioning term $\aleph_0 = -\sum c_j y_{t-j}$ from the target and delegates the remainder to $f_\theta$, which is updated online. The preconditioning coefficients $c_{1:n}$ are fixed (not learned) and independent of the underlying system.
+
 \begin{algorithm}[t]
-\caption{Universal Sequence Preconditioning for Regression \citep[Alg.~2]{marsden2024universal}}
+\caption{Universal Sequence Preconditioning \citep[Alg.~1]{marsden2024universal}}
+\label{alg:usp-general}
+\begin{algorithmic}[1]
+\REQUIRE Sequence prediction model $f_\theta$ with initial parameters $\theta_0$; loss function $\ell(\cdot)$; preconditioning coefficients $c_{1:n}$.
+\FOR{$t = 1$ \TO $T$}
+    \STATE Receive input $u_t$.
+    \STATE Predict $\hat y_t = -\sum_{j=1}^{n} c_j\, y_{t-j} + f_{\theta_t}(u_{1:t},\, y_{1:t-1})$.
+    \STATE Observe true output $y_t$; suffer loss $\ell_t(\hat y_t, y_t)$.
+    \STATE Update: $\theta_{t+1} \leftarrow \mathrm{proj}_{\mathcal{K}}\!\bigl(\theta_t - \eta_t \nabla_\theta \ell_t(\hat y_t, y_t)\bigr)$.
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+Algorithm~\ref{alg:usp-regression} instantiates this framework with convex regression as the base learner. The learnable parameters are matrices $Q_0, \ldots, Q_{n-1}$ that approximate the $\aleph_1$ term; the residual $\aleph_2$ is treated as an unlearnable error. This specific instantiation is the one for which Marsden and Hazan derive formal regret bounds (Section~\ref{sec:usp-regret}).
+
+\begin{algorithm}[t]
+\caption{USP for Regression \citep[Alg.~2]{marsden2024universal}}
 \label{alg:usp-regression}
 \begin{algorithmic}[1]
 \REQUIRE Initial parameters $Q_0$; preconditioning coefficients $c_{0:n}$ from the $n$-th degree monic Chebyshev polynomial; convex constraint set $\mathcal{K} = \{(Q_0, \ldots, Q_{n-1}) : \norm{Q_j} \leq C_{\mathrm{domain}} \norm{\boldsymbol{c}}_1\}$.
@@ -353,9 +371,7 @@ The term $\aleph_0$ is the universal preconditioning component: it depends only 
 \end{algorithmic}
 \end{algorithm}
 
-Algorithm~\ref{alg:usp-regression} instantiates USP with convex regression. The predictor subtracts the preconditioning term $\aleph_0$ from the target and learns the $\aleph_1$ term via projected online gradient descent; the residual $\aleph_2$ is treated as an unlearnable error.
-
-\citet{marsden2024universal} also introduce a second, more powerful instantiation that combines preconditioning with spectral filtering (their Algorithm~3). Spectral filtering learns both $\aleph_1$ and $\aleph_2$, which yields a better regret rate of $\tilde O(T^{-3/13})$ compared to $\tilde O(T^{-2/13})$ for regression alone (see Theorems~\ref{thm:usp-general} and~\ref{thm:usp-chebyshev} below). In both cases, the preconditioning polynomial shrinks the learnable domain, making the online optimisation problem easier.
+\citet{marsden2024universal} also introduce a more powerful instantiation that combines preconditioning with spectral filtering (their Algorithm~3). Spectral filtering learns both $\aleph_1$ and $\aleph_2$, yielding a better regret rate of $\tilde O(T^{-3/13})$ compared to $\tilde O(T^{-2/13})$ for regression alone (Theorems~\ref{thm:usp-general} and~\ref{thm:usp-chebyshev}). In both cases, the preconditioning polynomial shrinks the learnable domain, making the online optimisation problem easier.
 
 \subsection{The USP Regret Bound}
 \label{sec:usp-regret}

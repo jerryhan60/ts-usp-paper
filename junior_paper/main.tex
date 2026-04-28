@@ -63,7 +63,7 @@
 
 \begin{abstract}
 \noindent
-Patch-based transformer architectures for universal time series forecasting segment the input into fixed-length patches and embed each patch independently, creating a \emph{cross-patch information bottleneck}: temporal patterns spanning multiple patches must be recovered entirely through attention. Drawing on the recent theoretical framework of universal sequence preconditioning~\citep{marsden2024universal}, which shows that polynomial transformations of a sequence reduce the spectral complexity faced by online predictors of linear dynamical systems, we propose \textbf{\method} for patch-based transformers. We apply a fixed Chebyshev polynomial FIR filter to the raw time series and concatenate the result as an auxiliary input channel, injecting cross-patch temporal information with negligible parameter overhead ($12\,$K parameters, $0.11\%$ of the model). Two lines of justification underpin the choice of Chebyshev polynomials: (i) the classical equioscillation theorem of Chebyshev, which characterises the monic degree-$d$ polynomial of minimal supremum norm on $[-1,1]$; and (ii) the regret-reduction theorems of Marsden and Hazan, which show that such preconditioners yield sublinear, hidden-dimension-independent regret bounds for marginally stable linear dynamical systems. We analyse our specific filter's frequency response in closed form, prove a stability lemma, and validate the theoretical predictions on synthetic linear dynamical system trajectories and on the GIFT-Eval benchmark of 97 dataset--horizon configurations. Across 5 seeds and 485 paired comparisons, our method improves geometric mean MASE by $2.9\%$ over the Moirai-2 Small baseline ($p < 10^{-15}$), winning 329 of 485 comparisons after Holm--Bonferroni correction at $\alpha=0.05$. Controlled capacity experiments confirm that the improvement is driven by polynomial content rather than extra parameters: duplicating the input as a second channel \emph{hurts} performance ($44.7\%$ win rate), while a zero channel is essentially neutral. At $100$K training steps, the improvement grows to $3.9\%$. We report Holm--Bonferroni-corrected $p$-values, bootstrap confidence intervals, and an analysis of which dataset frequency-structure characteristics predict the size of the improvement, testing the spectral hypothesis implied by the theory.
+\emph{Universal Sequence Preconditioning} (USP) is a recent theoretical framework~\citep{marsden2024universal} for online sequence prediction in which a fixed convolutional transformation of the target sequence---specifically, convolution with the coefficients of a monic Chebyshev or Legendre polynomial---yields provable, hidden-dimension-independent regret bounds for marginally stable linear dynamical systems (LDS). This paper investigates whether the USP idea transfers, empirically and theoretically, to a setting that the original framework does not directly cover: \emph{patch-based transformer foundation models for time-series forecasting}, such as Moirai-2~\citep{liu2024moirai2}. The setting differs from USP in three ways---the forecaster is a patch-based transformer rather than an online learner, the data may be far richer than a finite-dimensional LDS, and the forecasting task is multi-step rather than single-step. To accommodate these differences we propose \textbf{\method}, in which the polynomial-preconditioned signal is concatenated as an auxiliary input \emph{channel} alongside the raw target rather than replacing it, sidestepping the catastrophic error accumulation that pure target preconditioning would induce under autoregressive multi-step rollout. Architecturally, only the per-patch input projection is widened; the transformer decoder is unchanged, adding $12$K parameters or $0.11\%$ of the Moirai-2 Small model. We give a self-contained mathematical treatment grounded in the Chebyshev equioscillation theorem and a closed-form analysis of our filter's frequency response, a noise-gain analysis with a spectral--noise tradeoff, and a comparison of the Chebyshev basis with Legendre and second-kind alternatives. Empirically, on the GIFT-Eval benchmark ($97$ dataset $\times$ horizon configurations, 5 seeds, $485$ paired comparisons) our method achieves a $\Delta\mathrm{MASE}^* = -2.9\%$ relative improvement in the normalised geometric-mean MASE over a from-scratch Moirai-2 Small baseline ($p < 10^{-15}$, paired sign test), winning $329$ of $485$ paired comparisons; capacity-matched controls (duplicate channel, zero channel) confirm that the polynomial content---not the extra parameters---drives the gain. At $100$K training steps the improvement grows to $\Delta\mathrm{MASE}^* = -3.9\%$, and the gain remains around $-5\%$ across context lengths $512$--$4{,}000$. Throughout the paper we report relative MASE changes with the convention $\Delta\% = (\text{treatment} - \text{control})/\text{control}$, so a negative $\Delta\%$ means lower MASE (an improvement).
 \end{abstract}
 
 \section*{Acknowledgments and Contributions}
@@ -86,34 +86,52 @@ This paper represents my own work in accordance with University regulations.\\[0
 \section{Introduction}
 %==============================================================================
 
-Universal time series forecasting~\citep{woo2024unified, liu2024moirai2, das2024decoder, ansari2024chronos, goswami2024moment, auer2025tirex} has emerged as a pretraining paradigm for transformer-based models trained on heterogeneous corpora that span frequencies from sub-hourly to yearly, and whose behaviour at inference time is expected to transfer across unseen domains without task-specific fine-tuning. A growing body of models---Moirai, TimesFM, Chronos, MOMENT, TiRex---shares a common architectural primitive with PatchTST~\citep{nie2023patchtst} and Vision Transformer~\citep{dosovitskiy2021image}: the input sequence is segmented into non-overlapping patches of length $P$, each patch is projected to a $d$-dimensional embedding independently, and interactions across patches are mediated entirely by self-attention. This design yields substantial gains in throughput relative to token-level transformers, but it introduces what we call the \emph{cross-patch information bottleneck}: each patch embedding, before the first attention layer, encodes only $P$ time steps, so temporal correlations whose natural scale exceeds $P$ (e.g., daily periodicities in $15$-minute data, spanning $96$ steps or six patches at $P=16$) must be discovered end-to-end by the attention mechanism. Smaller models, with fewer attention heads and layers, are especially constrained.
+\paragraph{Universal sequence preconditioning.}
+\citet{marsden2024universal} recently proved provable guarantees for online prediction algorithms on data arising from marginally stable, possibly asymmetric, linear dynamical systems (LDS). Their key observation: for an LDS with hidden-state recurrence $h_{t+1} = A h_t + w_t$ and observation $y_t = C h_t + e_t$, convolving the target sequence with the coefficients of a degree-$d$ monic polynomial $p(z)$ is algebraically equivalent to multiplying the hidden dynamics by $p(A)$. Choosing $p$ to be the monic Chebyshev polynomial of the first kind, $\tilde T_d$, exploits its classical equioscillation property: among all monic degree-$d$ polynomials, $\tilde T_d$ uniquely attains the minimal $\ell_\infty$ norm $2^{1-d}$ on $[-1,1]$~\citep{davis1975interpolation}. Hence whenever $A$'s real spectrum lies in $[-\rho(A),\rho(A)]$,
+\[
+    \rho\bigl(\tilde T_d(A/\rho(A))\bigr) \;\leq\; 2^{1-d},
+\]
+so the preconditioned dynamics has spectral radius shrunk by a factor of $2^{1-d}$ relative to the original system. Combining this fact with online convex regression delivers the first sublinear, \emph{hidden-dimension-independent} regret bounds for online prediction in the asymmetric LDS class. Empirically, \citet{marsden2024universal} show that USP with fixed Chebyshev or Legendre coefficients reduces prediction error on synthetic linear, nonlinear, and deep-RNN-generated sequences and on the ETTh1 benchmark.
 
-\paragraph{Our intervention.}
-We propose \textbf{\method{}}, a simple architectural change that alleviates the cross-patch bottleneck at constant parameter cost. Given the input sequence $x[t]$, we compute a \emph{preconditioning channel} by applying a fixed finite-impulse-response filter
+\paragraph{Does this transfer to universal time-series forecasting?}
+The setting of pretrained foundation models for time series~\citep{woo2024unified, liu2024moirai2, das2024decoder, ansari2024chronos, goswami2024moment, auer2025tirex} differs from the theoretical framework of USP in three important ways:
+\begin{enumerate}[leftmargin=1.5em, itemsep=0.1em, topsep=0.2em]
+    \item \emph{The forecaster is a patch-based transformer rather than an online learner.} Models such as Moirai-2~\citep{liu2024moirai2} segment the input into fixed-length patches and embed each patch independently before any attention. The cumulative regret of an online learner is replaced by a batch-style empirical loss, and the model has access to the entire context window simultaneously rather than one observation at a time.
+    \item \emph{The data-generating process is far richer than a finite-dimensional LDS.} Pretraining corpora such as LOTSA~\citep{woo2024unified} aggregate billions of observations across heterogeneous domains, frequencies, and noise structures; many of the resulting signals are not well-modelled as outputs of a single low-dimensional LDS, so the algebraic equivalence ``$p(B) y_t \leftrightarrow p(A) h_t$'' applies, at best, only locally and approximately.
+    \item \emph{The task is multi-step-ahead forecasting, not single-step online prediction.} A naive approach to USP for forecasting would precondition the target, train the predictor to emit the preconditioned next-step value $\hat{\tilde y}_{t+1}$, and invert the convolution at inference to recover $\hat y_{t+1}$. However, the inversion is a causal recurrence
+    \begin{equation}
+        \hat y_t \;=\; \hat{\tilde y}_t \;-\; \sum_{k=1}^{d} c_k\, \hat y_{t-k},
+        \label{eq:inversion}
+    \end{equation}
+    so for an autoregressive multi-step rollout the prediction error compounds across the inversion, leading to catastrophic accumulation.
+\end{enumerate}
+
+\paragraph{Our approach: a residual preconditioning channel.}
+To resolve the multi-step inversion problem, we leave the forecast target unchanged and use the polynomial-preconditioned signal as an \emph{auxiliary input channel}. Concretely, given a univariate input sequence $x[t]$, we apply a degree-$d$ monic polynomial $p$ in the lag operator $B_s$ at stride $s$ and form the residual
 \begin{equation}
-    h[t] = (p(B_s) x)[t] = \sum_{k=0}^{d} a_k \, x[t - k s],
+    \tilde h[t] \;=\; (p(B_s) x)[t] - x[t] \;=\; \sum_{k=1}^{d} c_k \, x[t - k s],
     \label{eq:precond-intro}
 \end{equation}
-where $B_s$ is the shift-by-$s$ operator $(B_s x)[t] = x[t-s]$, the polynomial $p(z) = \sum_{k=0}^d a_k z^k$ is a degree-$d$ polynomial with coefficients derived from the monic Chebyshev polynomial $\tilde{T}_d$, and the stride $s$ is set equal to the patch size $P$. The preconditioning channel is concatenated with the target and observation-mask channels before the initial per-patch projection. Only the width of this first projection grows; the transformer encoder is unchanged. For $d = 4$ and $s = P = 16$, the preconditioning channel reduces to
+where $\{c_k\}_{k=1}^{d}$ are the non-leading coefficients of the chosen monic polynomial and the stride $s$ is set equal to the patch size $P$. We use the residual rather than the full filter output so that the preconditioning channel captures the \emph{novel} information injected by preconditioning (subtracting the raw signal, which is already available as the existing target channel). For our default choice---the monic Chebyshev polynomial $\tilde T_d$ with $d=4$, $s = P = 16$---the residual reduces to
 \[
-    h[t] = x[t] - x[t - 2 P] + \tfrac{1}{8} x[t - 4 P],
+    \tilde h[t] \;=\; -x[t - 2P] + \tfrac{1}{8} x[t - 4P],
 \]
-which injects information from two and four patches in the past into each current-patch embedding \emph{before} the first attention layer---at a cost of $12$K extra parameters, or $0.11\%$ of the Moirai-2 Small model.
+i.e., a sparse FIR filter that injects information from two and four patches in the past. Because the model never operates in preconditioned space at inference, no inversion is needed and the multi-step error accumulation of Eq.~\eqref{eq:inversion} is avoided.
 
-\paragraph{Mathematical motivation.}
-Two threads of mathematics motivate this design. The first is classical: the \emph{Chebyshev equioscillation theorem} states that among all monic polynomials of degree $d$ on the interval $[-1,1]$, the monic Chebyshev polynomial $\tilde{T}_d$ uniquely attains the minimal supremum norm, which equals $2^{1 - d}$~\citep{davis1975interpolation}. Consequently, any degree-$d$ transformation of a sequence whose power is spectrally concentrated on a normalized frequency interval is best compressed---in the uniform-norm sense---by Chebyshev coefficients. The second thread is modern: \citet{marsden2024universal} show that, within the framework of online prediction of linear dynamical systems (LDS), applying a polynomial $p(B)$ to the target sequence is \emph{equivalent} to applying $p(A)$ to the hidden transition matrix $A$, and they prove that Chebyshev and Legendre preconditioners yield the first sublinear and hidden-dimension-independent regret bounds for systems with marginally stable, possibly asymmetric, transition matrices. While patch-based transformers are not literally online predictors of LDSs, the spectral intuition transfers: a polynomial preconditioner redistributes the signal's energy across frequency bands in a way that disentangles long-scale correlations, and Chebyshev coefficients achieve the best worst-case redistribution within the monic degree-$d$ family.
+\paragraph{Why this should help: the cross-patch information bottleneck.}
+Patch-based architectures~\citep{nie2023patchtst, dosovitskiy2021image} embed each patch independently before attention, creating what we call a \emph{cross-patch information bottleneck}: before the first self-attention layer, a patch embedding encodes only $P$ time steps, so temporal correlations whose natural scale exceeds $P$ (e.g., daily periodicities in $15$-minute data, spanning $96$ steps or $6$ patches at $P=16$) must be discovered end-to-end by attention. A polynomial preconditioner that mixes information across multi-patch scales \emph{before} patching directly alleviates this bottleneck: each patch embedding now sees a low-dimensional summary of the cross-patch context for free. Combined with the spectral-attenuation property of Chebyshev polynomials, this provides a principled, parameter-efficient inductive bias that the model would otherwise have to discover through attention.
 
 \paragraph{Empirical evidence.}
-We retrain the Moirai-2 Small encoder~\citep{liu2024moirai2} (11.4M parameters, six transformer blocks, $P=16$) on the LOTSA corpus~\citep{woo2024unified} for $10$K and $100$K optimizer steps, comparing four conditions: a standard \Baseline{}, a capacity-matched \Zero{} control (auxiliary channel filled with zeros), a capacity-matched \Dup{} control (auxiliary channel = copy of input), and our method \HD{} (Chebyshev $d=4$, stride $16$, $10\%$ channel dropout). On the $97$-configuration GIFT-Eval benchmark~\citep{vijay2024gifteval}, at context length $4{,}000$ and with five random seeds, \HD{} improves geometric-mean MASE by $2.9\%$ at $10$K steps ($p<10^{-15}$, sign test on $485$ paired comparisons; Holm--Bonferroni-corrected across all evaluated methods) and by $3.9\%$ at $100$K steps. Importantly, the \Dup{} capacity control \emph{hurts} performance ($44.7\%$ win rate) and \Zero{} is neutral ($54\%$, $p=0.042$ unadjusted), identifying the polynomial content---not the extra parameters---as the source of the gain. Cross-domain analysis confirms the spectral hypothesis: gains are largest on high-frequency domains (transport, energy) whose natural time scales align with the filter's lookback structure, and negligible on weather and healthcare where the dominant variations occur at scales either much shorter or much longer than our stride-$16$ filter.
+We retrain the Moirai-2 Small encoder~\citep{liu2024moirai2} ($11.4$M parameters, six decoder blocks, $P=16$) from scratch on the LOTSA corpus~\citep{woo2024unified} for $10$K and $100$K optimizer steps, comparing four conditions: a standard \Baseline{}, a capacity-matched \Zero{} control (auxiliary channel filled with zeros), a capacity-matched \Dup{} control (auxiliary channel = copy of input), and our method \HD{} (Chebyshev $d=4$, stride $16$, $10\%$ channel dropout). On the $97$-configuration GIFT-Eval benchmark~\citep{vijay2024gifteval}, at context length $4{,}000$ and with five random seeds, \HD{} achieves $\Delta\mathrm{MASE}^* = -2.9\%$ at $10$K steps ($p<10^{-15}$, sign test on $485$ paired comparisons) and $-3.9\%$ at $100$K steps. The \Dup{} capacity control \emph{hurts} performance ($44.7\%$ win rate) and \Zero{} is neutral ($54\%$), identifying the polynomial content---not the extra parameters---as the source of the gain. Cross-domain analysis is consistent with the spectral hypothesis: gains are largest on high-frequency domains (transport, energy) whose natural time scales align with the filter's lookback structure, and negligible on weather and healthcare where the dominant variations occur at scales either much shorter or much longer than our stride-$16$ filter.
 
-\paragraph{Contributions and Outline.}
+\paragraph{Contributions and outline.}
 The remainder of this paper develops the following contributions:
 \begin{enumerate}[leftmargin=1.5em, topsep=0.2em, itemsep=0.2em]
-  \item A rigorous statement (Section~\ref{sec:preliminaries} and Section~\ref{sec:precondition}) of the mathematical framework of universal sequence preconditioning, specialized from online LDS prediction to patch-based transformer forecasting, including the frequency-response analysis of our specific filter.
-  \item A self-contained proof sketch (Section~\ref{sec:chebyshev}) of the Chebyshev equioscillation theorem and its implications for polynomial preconditioning, and a closed-form derivation of the frequency response $H(e^{j\omega})$ of our preconditioning filter (Theorem~\ref{thm:freq-response}).
-  \item A stability lemma (Lemma~\ref{lem:stability}) establishing that the preconditioning operation preserves bounded variance and is hence BIBO-stable, relevant for practical numerical behavior.
-  \item An empirical validation (Section~\ref{sec:empirical}) on: (a) synthetic marginally-stable linear dynamical systems, where the predicted spectral attenuation $\abs{H(\omega_k)}^2 = 2^{2-2d}$ matches the empirical PSD notch depth quantitatively, while a regret-side probe with a well-specified offline AR forecaster shows---as expected from the limits of the regret-reduction theorems---that preconditioning helps only when the forecaster has limited capacity to capture multi-patch correlations on its own; (b) the GIFT-Eval benchmark, where polynomial input preconditioning improves a capacity-limited patch-based transformer by $2.9\%$ MASE; this is supplemented by extensive capacity-control ablations and a spectral-correlate analysis that tests the frequency-response hypothesis dataset-by-dataset.
-  \item A rigorous statistical methodology section (Section~\ref{sec:stats}) presenting multiple-testing-corrected significance tests, bootstrap confidence intervals, and effect sizes, supporting the paper's inferential claims and contextualizing the size of the observed improvement.
+  \item A rigorous statement (Section~\ref{sec:preliminaries} and Section~\ref{sec:precondition}) of the mathematical framework of universal sequence preconditioning, specialized from online LDS prediction to patch-based transformer forecasting.
+  \item A self-contained treatment (Section~\ref{sec:chebyshev}) of the Chebyshev equioscillation theorem and its implications for polynomial preconditioning, a closed-form derivation of the frequency response of our preconditioning filter (Theorem~\ref{thm:freq-response}), a stability lemma (Lemma~\ref{lem:stability}), a noise-gain analysis with a spectral--noise tradeoff, and a basis comparison with Legendre and second-kind Chebyshev polynomials.
+  \item A self-contained description (Section~\ref{sec:patch-transformers}) of the Moirai-2 architecture, its prefix-LM pretraining objective, the LOTSA training corpus, the multi-token inference procedure, and the GIFT-Eval evaluation protocol with a rigorous definition of the MASE metric.
+  \item An empirical validation (Section~\ref{sec:empirical}) on (a) synthetic marginally-stable linear dynamical systems, where the predicted spectral-attenuation values $\abs{H(\omega_k)-1}^2$ match the empirical PSD notches; (b) the GIFT-Eval benchmark, where polynomial input preconditioning improves a capacity-limited patch-based transformer's $\overline{\mathrm{MASE}^*}$ by $\Delta\mathrm{MASE}^* = -2.9\%$; supplemented by extensive capacity-control ablations and a spectral-correlate analysis that tests the frequency-response hypothesis dataset-by-dataset.
+  \item A statistical-methodology section (Section~\ref{sec:statistics}) presenting paired sign tests, bootstrap confidence intervals, effect sizes, and a sign-test power calculation, supporting the paper's inferential claims.
 \end{enumerate}
 
 %==============================================================================
@@ -545,12 +563,40 @@ At inference, the model is presented with the full observed history followed by 
 \subsection{Evaluation: GIFT-Eval}
 \label{sec:gifteval}
 
-We evaluate on \textsc{GIFT-Eval}~\citep{vijay2024gifteval}, an open benchmark of $97$ dataset $\times$ horizon configurations spanning $24$ datasets and $7$ frequency classes (sub-hourly through yearly), curated to test the zero-shot generalization claim of universal forecasters. Each configuration specifies a held-out split, prediction horizon, and patch-size convention; we follow the recommended convention of $P = 8$ for quarterly data and $P = 32$ for all other frequencies, with context length $4{,}000$. Each model's forecast is scored by the \emph{normalised MASE},
+We evaluate on \textsc{GIFT-Eval}~\citep{vijay2024gifteval}, an open benchmark of $97$ dataset $\times$ horizon configurations spanning $24$ datasets and $7$ frequency classes (sub-hourly through yearly), curated to test the zero-shot generalization claim of universal forecasters. Each configuration specifies a held-out split, prediction horizon, and patch-size convention; we follow the recommended convention of $P = 8$ for quarterly data and $P = 32$ for all other frequencies, with context length $4{,}000$. The remainder of this subsection rigorously defines the metric we report.
+
+\paragraph{Mean Absolute Scaled Error (MASE).}
+For a single test series with point forecast $\hat y_{t}$ and ground-truth $y_{t}$ over a prediction window of length $H$, the \emph{Mean Absolute Scaled Error} \citep{hyndman2006another} is defined as
 \begin{equation}
-    \mathrm{MASE}^*(\text{model}, c) \;=\; \frac{\mathrm{MASE}(\text{model}, c)}{\mathrm{MASE}(\text{seasonal naive}, c)},
+    \mathrm{MASE}(\hat y, y) \;=\; \frac{\frac{1}{H}\sum_{t=1}^{H} \abs{y_t - \hat y_t}}{\frac{1}{N - m}\sum_{t = m+1}^{N} \abs{y^{\text{train}}_t - y^{\text{train}}_{t-m}}},
+    \label{eq:mase-def}
+\end{equation}
+where $y^{\text{train}}_{1:N}$ is the in-sample (training) portion of the same series and $m$ is the seasonal period (e.g., $m = 24$ for hourly data with daily seasonality, $m = 1$ for non-seasonal series). The denominator is the in-sample mean absolute error of the \emph{seasonal naive} predictor $\hat y_t^{\text{snaive}} = y_{t-m}$, providing a series-specific scaling that makes the metric unitless and comparable across series of different magnitudes. A MASE below $1$ means the model beats the seasonal-naive predictor on that series in mean absolute error; above $1$ means it does not.
+
+\paragraph{Aggregation across a configuration.}
+A GIFT-Eval ``configuration'' $c$ is a (dataset, prediction-horizon) pair. The benchmark evaluates the model on a fixed test split of multiple windows from each dataset; let $\mathcal{W}_c$ denote this set of test windows. The configuration-level raw MASE is the mean across windows:
+\begin{equation}
+    \mathrm{MASE}(\text{model}, c) \;=\; \frac{1}{\abs{\mathcal{W}_c}} \sum_{(\hat y, y) \in \mathcal{W}_c} \mathrm{MASE}(\hat y, y).
+\end{equation}
+
+\paragraph{Normalised MASE.}
+Because absolute MASE values vary by orders of magnitude across configurations (some series are easy to forecast, some are not), the GIFT-Eval leaderboard divides each configuration's MASE by that configuration's seasonal-naive MASE before aggregating across configurations:
+\begin{equation}
+    \mathrm{MASE}^*(\text{model}, c) \;=\; \frac{\mathrm{MASE}(\text{model}, c)}{\mathrm{MASE}(\text{seasonal naive}, c)}.
     \label{eq:normalised-mase}
 \end{equation}
-which divides each configuration's raw MASE by the seasonal-naive baseline's MASE on the same configuration. A score below $1$ means the model beats seasonal-naive on that configuration. The headline aggregate is the geometric mean of $\mathrm{MASE}^*$ across all $97$ configurations. We report cross-seed mean and standard deviation, paired sign-test counts (out of $97$ per seed; $5 \cdot 97 = 485$ pooled across $5$ seeds), and Holm--Bonferroni-corrected $p$-values; the full statistical methodology is in Section~\ref{sec:statistics}.
+A configuration-level $\mathrm{MASE}^*$ below $1$ means the model beats seasonal-naive on that configuration; above $1$ means it does not. Note that $\mathrm{MASE}^*$ is the ratio of the model's MASE to the seasonal-naive MASE, both computed using \eqref{eq:mase-def}; the seasonal-naive denominator therefore cancels, and $\mathrm{MASE}^*(\text{model}, c)$ is equivalently the ratio of the model's window-mean absolute error to the seasonal-naive predictor's window-mean absolute error on configuration $c$.
+
+\paragraph{Geometric-mean aggregation.}
+The headline aggregate is the geometric mean of $\mathrm{MASE}^*$ across all $C = 97$ configurations:
+\begin{equation}
+    \overline{\mathrm{MASE}^*}(\text{model}) \;=\; \left(\prod_{c=1}^{C} \mathrm{MASE}^*(\text{model}, c)\right)^{1/C} \;=\; \exp\!\left(\frac{1}{C}\sum_{c=1}^{C} \log \mathrm{MASE}^*(\text{model}, c)\right).
+    \label{eq:geomean}
+\end{equation}
+The geometric mean is preferred over the arithmetic mean because it is symmetric in the log-domain ($\log\overline{\mathrm{MASE}^*}$ is the arithmetic mean of $\log\mathrm{MASE}^*$), so the aggregate cannot be dominated by a single configuration on which one model has an extreme MASE. Equivalently, it averages \emph{relative} performance across configurations. As a reference point, our retrained Moirai-2 Small \Baseline{} attains $\overline{\mathrm{MASE}^*} \approx 0.862$ at $10$K steps; the official Moirai-2.0-R-Small release attains $\approx 0.728$ on the same metric (Appendix~\ref{app:official-moirai}).
+
+\paragraph{Reporting convention.}
+We report cross-seed mean and standard deviation of $\overline{\mathrm{MASE}^*}$, paired sign-test counts (out of $97$ per seed; $5 \cdot 97 = 485$ pooled across $5$ seeds), and raw two-sided $p$-values from the binomial distribution. Headline relative changes between methods are reported as $\Delta\% = \big(\overline{\mathrm{MASE}^*}(\text{treatment}) - \overline{\mathrm{MASE}^*}(\text{control})\big) / \overline{\mathrm{MASE}^*}(\text{control}) \cdot 100$, so a negative $\Delta\%$ means the treatment achieves lower MASE (an improvement). The full statistical methodology is in Section~\ref{sec:statistics}.
 
 \subsection{Why this baseline matters for the present work}
 \label{sec:why-moirai}
@@ -601,21 +647,21 @@ Our experimental protocol exactly matches Section~\ref{sec:patch-transformers}: 
 
 \begin{table}[h]
 \centering
-\caption{Main results on GIFT-Eval, 5 seeds, 485 paired comparisons per method. $\Delta\%$ is the geometric-mean MASE change relative to \Baseline{}. Win rates are sign-test wins in paired per-configuration comparisons. Holm--Bonferroni-adjusted $p$-values are reported in the last column, correcting across the three comparisons in this table.}
+\caption{Main results on GIFT-Eval, 5 seeds, 485 paired comparisons per method. $\Delta\%$ is the geometric-mean MASE change relative to \Baseline{}; negative values mean lower MASE (improvement). Win rates are sign-test wins in paired per-configuration comparisons. The last column reports raw two-sided $p$-values from the paired sign test under the iid null.}
 \label{tab:main}
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Method} & \textbf{GeoMean MASE} & \textbf{$\Delta$\% vs \Baseline{}} & \textbf{Wins / 485} & \textbf{$p_{\text{HB}}$} \\
+\textbf{Method} & \textbf{GeoMean MASE} & \textbf{$\Delta$\% vs \Baseline{}} & \textbf{Wins / 485} & \textbf{$p$} \\
 \midrule
-\HD{} (Ours) & $\mathbf{0.837}$ & $\mathbf{-2.89\%}$ & $\mathbf{329}$ & $\mathbf{<10^{-14}}$ \\
-\Zero{} (capacity control) & $0.858$ & $-0.45\%$ & $262$ & $0.13$ \\
+\HD{} (Ours) & $\mathbf{0.837}$ & $\mathbf{-2.89\%}$ & $\mathbf{329}$ & $\mathbf{2.9 \times 10^{-15}}$ \\
+\Zero{} (capacity control) & $0.858$ & $-0.45\%$ & $262$ & $0.044$ \\
 \Baseline{} & $0.862$ & --- & --- & --- \\
 \Dup{} (capacity control) & $0.865$ & $+0.38\%$ & $217$ & $>0.99$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:main} shows that \HD{} improves geometric-mean MASE by $2.89\%$ over \Baseline{} at $10$K steps (pooled $p_{\text{HB}} < 10^{-14}$). Notably, neither capacity control provides a comparable benefit: \Dup{} \emph{hurts} performance ($44.7\%$ wins vs.\ $50\%$ expected by chance), and \Zero{} is at most weakly beneficial. These controls are diagnostic: they isolate the \emph{polynomial content} of the preconditioning channel, as opposed to the mere presence of an additional input channel or an extra $12$K parameters, as the causal driver of the gain.
+Table~\ref{tab:main} shows that \HD{} improves geometric-mean MASE by $2.89\%$ over \Baseline{} at $10$K steps ($p < 10^{-14}$). Notably, neither capacity control provides a comparable benefit: \Dup{} \emph{hurts} performance ($44.7\%$ wins vs.\ $50\%$ expected by chance), and \Zero{} is at most weakly beneficial. These controls are diagnostic: they isolate the \emph{polynomial content} of the preconditioning channel, as opposed to the mere presence of an additional input channel or an extra $12$K parameters, as the causal driver of the gain.
 
 \subsection{Ablation: Filter Degree, Stride, Basis, and Dropout}
 
@@ -806,13 +852,7 @@ For each pairing of method $m$ versus baseline $B$ and each (seed, config) pair 
 \paragraph{Independence caveat.}
 Independence across the $5 \times 97$ outcomes is not strictly justified: each of the $97$ configurations is reused across all $5$ seeds with the same training data and evaluation setup, so the $5$ wins for a fixed configuration are not independent draws (the configuration's intrinsic difficulty and noise enter every seed). Per-seed sign tests, conditional on a fixed seed, do not have this issue: within a seed, the $97$ configurations are paired and the wins can be treated as $97$ approximately-independent Bernoulli draws under the null. We therefore report both per-seed and pooled sign-test $p$-values; the per-seed tests are more conservative (smaller effective sample size, but proper independence assumption), and the pooled tests assume an exchangeable-by-configuration null that may overstate certainty if the configuration-level dependence is large. A cluster-robust sensitivity analysis would either bootstrap by configuration (resampling configurations with replacement) or use a configuration-clustered standard error; we leave a formal cluster bootstrap to follow-up work.
 
-We report two-sided $p$-values throughout. For \HD{} vs.\ \Baseline{}, $W = 329$, yielding pooled $p = 1.5 \times 10^{-15}$ under the iid null and four-of-five-seeds significant at $\alpha = 0.05$ under per-seed tests with Holm correction (Appendix~\ref{app:seeds}). Both formulations agree on the qualitative conclusion that \HD{} systematically beats \Baseline{}, but the numerical $p$-value is more robust under the per-seed tests.
-
-\subsection{Multiple-Testing Correction}
-
-We correct for testing multiple methods (here $\HD{}$, \Zero{}, \Dup{} versus \Baseline{}, plus several ablation comparisons) using the Holm--Bonferroni step-down procedure~\citep{holm1979simple}, which controls familywise error rate (FWER) at level $\alpha$. Sorting the three primary $p$-values ascending and comparing against $\alpha/3, \alpha/2, \alpha/1$, we retain the \HD{} result at the $\alpha = 0.05$ level (adjusted $p < 10^{-14}$) and would retain \Zero{} at $\alpha = 0.10$ (adjusted $p = 0.13$; not significant at $0.05$).
-
-For per-seed analyses ($5$ seeds for \HD{} vs.\ \Baseline{}, $97$ paired comparisons each), we also report Benjamini--Hochberg false-discovery-rate (FDR) corrected $p$-values at level $q = 0.05$~\citep{benjamini1995controlling}. Holm-corrected per-seed two-sided $p$-values are: $1.5 \times 10^{-3}$ (s0), $0.31$ (s1), $5.9 \times 10^{-5}$ (s2), $5.8 \times 10^{-9}$ (s7), $2.9 \times 10^{-2}$ (s42); four of five seeds remain individually significant at $\alpha = 0.05$, and the result is robust to the most conservative FWER correction over per-seed tests (Appendix~\ref{app:seeds}).
+We report two-sided $p$-values throughout. For \HD{} vs.\ \Baseline{}, $W = 329$, yielding pooled $p = 1.5 \times 10^{-15}$ under the iid null. Per-seed sign-test two-sided $p$-values for the five seeds $\{0, 1, 2, 7, 42\}$ are $5.0 \times 10^{-4}$, $0.31$, $2.0 \times 10^{-5}$, $1.2 \times 10^{-9}$, and $9.6 \times 10^{-3}$; four of five seeds reject the null at $\alpha = 0.05$ individually. Both formulations agree on the qualitative conclusion that \HD{} systematically beats \Baseline{}.
 
 \subsection{Bootstrap Confidence Intervals}
 
@@ -853,13 +893,13 @@ FIR filter design with Chebyshev polynomials is a classical topic~\citep{parks19
 %==============================================================================
 
 \paragraph{When does preconditioning help?}
-The spectral story predicts---and the spectral-correlate analysis (Section~\ref{sec:spectral-correlate}) is directionally consistent with---that datasets whose power spectrum aligns with the filter's attenuation minima benefit least, and those whose mass aligns with passbands benefit most. The cross-domain pattern is consistent with this prediction in a coarse sense: transport and energy domains ($+4$ to $+7\%$ gains) have strong autocorrelation at the $32$- and $64$-sample lookback scales of the filter at $15$-minute resolution (corresponding to $8/16$-hour intra-day structure); weather and healthcare, dominated by much-longer or stochastic correlations, show no significant improvement. We do not claim that this matches the precise filter-frequency calculation in Theorem~\ref{thm:freq-response}; the $32$- and $64$-step filter lags and the $\omega = 0, 1/32, 1/16, \ldots$ attenuation frequencies are distinct mathematical objects, and the cross-domain evidence cannot distinguish their respective contributions.
+The spectral story predicts---and the spectral-correlate analysis (Section~\ref{sec:spectral-correlate}) is directionally consistent with---that datasets whose power spectrum aligns with the filter's attenuation minima benefit least, and those whose mass aligns with passbands benefit most. The cross-domain pattern is consistent with this prediction in a coarse sense: transport and energy domains ($-4$ to $-7\%$ MASE) have strong autocorrelation at the $32$- and $64$-sample lookback scales of the filter at $15$-minute resolution (corresponding to $8/16$-hour intra-day structure); weather and healthcare, dominated by much-longer or stochastic correlations, show no significant improvement. We do not claim that this matches the precise filter-frequency calculation in Theorem~\ref{thm:freq-response}; the $32$- and $64$-step filter lags and the $\omega = 0, 1/32, 1/16, \ldots$ attenuation frequencies are distinct mathematical objects, and the cross-domain evidence cannot distinguish their respective contributions.
 
 \paragraph{Model scale.}
 We find that the benefit of input preconditioning is most pronounced at the small ($11.4$M) Moirai-2 scale; at the base ($46$M) scale, the improvement is seed-dependent and not consistently significant. This is consistent with a capacity-efficiency interpretation: when a model has enough parameters to discover the relevant cross-patch correlations via attention, the inductive bias of a fixed Chebyshev preconditioner adds less value.
 
 \paragraph{Learning rate.}
-At matched optimal learning rate, the effect attenuates to $+0.72\%$ ($p = 3.8 \times 10^{-4}$). This suggests that part of \HD{}'s observed benefit at the default learning rate stems from its greater insensitivity to optimization hyperparameters. Even after controlling for this, the effect remains statistically significant, but the magnitude is smaller.
+At matched optimal learning rate, the effect attenuates to $-0.72\%$ ($p = 3.8 \times 10^{-4}$). This suggests that part of \HD{}'s observed benefit at the default learning rate stems from its greater insensitivity to optimization hyperparameters. Even after controlling for this, the effect remains statistically significant, but the magnitude is smaller.
 
 \paragraph{Limitations.}
 We focused on univariate, single-variate forecasting; extensions to multivariate and probabilistic forecasting are left as future work. The Chebyshev choice was validated by ablation against a handful of alternatives (Legendre, EMA, finite differences); exhaustive search over the monic-degree-$d$ family is computationally infeasible but could be approximated by closed-form optimal linear filters (Wiener filters) in a synthetic setting.
@@ -868,7 +908,7 @@ We focused on univariate, single-variate forecasting; extensions to multivariate
 \section{Conclusion}
 %==============================================================================
 
-We studied polynomial input preconditioning for patch-based universal time series forecasters, a minimal architectural intervention that injects cross-patch temporal information via a fixed Chebyshev FIR filter at $0.11\%$ parameter overhead. Bridging the classical Chebyshev minimax theorem, the recent framework of universal sequence preconditioning~\citep{marsden2024universal}, and modern patch-based transformer forecasters, we established a closed-form frequency response for our specific filter, proved a BIBO-stability lemma, and validated the theoretical predictions empirically on synthetic LDS trajectories and on the GIFT-Eval benchmark ($2.9\%$ MASE improvement, $p < 10^{-15}$, $329$ of $485$ paired wins; Holm--Bonferroni-corrected). Controlled capacity experiments confirmed that the improvement is driven by the polynomial content of the preconditioning channel rather than by extra parameters. Our spectral-correlate analysis is directionally consistent with the prediction that cross-dataset variation in improvement aligns with dataset-level frequency structure, but does not confirm the mechanism at standard significance levels at the granularity of $39$ unique source datasets.
+We studied polynomial input preconditioning for patch-based universal time series forecasters, a minimal architectural intervention that injects cross-patch temporal information via a fixed Chebyshev FIR filter at $0.11\%$ parameter overhead. Bridging the classical Chebyshev minimax theorem, the recent framework of universal sequence preconditioning~\citep{marsden2024universal}, and modern patch-based transformer forecasters, we established a closed-form frequency response for our specific filter, proved a BIBO-stability lemma, and validated the theoretical predictions empirically on synthetic LDS trajectories and on the GIFT-Eval benchmark ($-2.9\%$ MASE, $p < 10^{-15}$, $329$ of $485$ paired wins). Controlled capacity experiments confirmed that the improvement is driven by the polynomial content of the preconditioning channel rather than by extra parameters. Our spectral-correlate analysis is directionally consistent with the prediction that cross-dataset variation in improvement aligns with dataset-level frequency structure, but does not confirm the mechanism at standard significance levels at the granularity of $39$ unique source datasets.
 
 \newpage
 \bibliographystyle{plainnat}
@@ -877,27 +917,27 @@ We studied polynomial input preconditioning for patch-based universal time serie
 \newpage
 \appendix
 
-\section{Per-Seed Sign Tests with Multiple-Testing Correction}
+\section{Per-Seed Sign Tests}
 \label{app:seeds}
 
-Table~\ref{tab:perseed-corrected} reports the per-seed paired sign-test outcomes for \HD{} vs.\ \Baseline{} on $97$ GIFT-Eval configurations per seed, together with raw, Holm--Bonferroni-corrected, and Benjamini--Hochberg-corrected $p$-values across the family of $5$ per-seed tests. Holm--Bonferroni controls the family-wise error rate at the nominal $\alpha$; BH controls the false-discovery rate at $q$. Four of five seeds reject the null at the corrected $\alpha = 0.05$ level under both procedures.
+Table~\ref{tab:perseed-corrected} reports the per-seed paired sign-test outcomes for \HD{} vs.\ \Baseline{} on $97$ GIFT-Eval configurations per seed, with raw two-sided $p$-values from the binomial test against the iid null. Four of five seeds reject the null at $\alpha = 0.05$.
 
 \begin{table}[h]
 \centering
-\caption{Per-seed sign tests for \HD{} vs.\ \Baseline{} ($n_c = 97$ configurations per seed, two-sided binomial). Corrections applied across the family of five per-seed tests.}
+\caption{Per-seed sign tests for \HD{} vs.\ \Baseline{} ($n_c = 97$ configurations per seed, two-sided binomial). $p$-values are raw (uncorrected).}
 \label{tab:perseed-corrected}
 \small
-\begin{tabular}{rcccc}
+\begin{tabular}{rcc}
 \toprule
-\textbf{Seed} & \textbf{Wins/97} & \textbf{$p_{\text{raw}}$} & \textbf{$p_{\text{Holm}}$} & \textbf{$p_{\text{BH}}$} \\
+\textbf{Seed} & \textbf{Wins/97} & \textbf{$p_{\text{raw}}$} \\
 \midrule
-0 & 66 & $4.9 \times 10^{-4}$ & $1.5 \times 10^{-3}$ & $8.2 \times 10^{-4}$ \\
-1 & 54 & $0.31$               & $0.31$               & $0.31$ \\
-2 & 70 & $1.5 \times 10^{-5}$ & $5.9 \times 10^{-5}$ & $3.7 \times 10^{-5}$ \\
-7 & 78 & $1.2 \times 10^{-9}$ & $5.8 \times 10^{-9}$ & $5.8 \times 10^{-9}$ \\
-42 & 61 & $1.4 \times 10^{-2}$ & $2.9 \times 10^{-2}$ & $1.8 \times 10^{-2}$ \\
+0 & 66 & $4.9 \times 10^{-4}$ \\
+1 & 54 & $0.31$               \\
+2 & 70 & $1.5 \times 10^{-5}$ \\
+7 & 78 & $1.2 \times 10^{-9}$ \\
+42 & 61 & $1.4 \times 10^{-2}$ \\
 \midrule
-\textbf{Pooled} & \textbf{329/485} & $\mathbf{2.9 \times 10^{-15}}$ & --- & --- \\
+\textbf{Pooled} & \textbf{329/485} & $\mathbf{2.9 \times 10^{-15}}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1121,6 +1161,74 @@ Latent $s=4$ & After input projection & 1.2243 & $+41.3\%$ \\
 Latent preconditioning is catastrophic. The filter must operate on the raw time series, not on learned embeddings: the spectral structure is destroyed by the input projection's nonlinear mixing.
 
 %==============================================================================
+\section{Polynomial Coefficients}
+\label{app:poly-coeffs}
+%==============================================================================
+
+This appendix lists the explicit FIR coefficients for every polynomial basis discussed in this paper. Throughout, we use the convention of Section~\ref{sec:precondition}: the residual filter applied to the input is $\tilde h[t] = (p(B_s) x)[t] - x[t] = \sum_{k=1}^{d} c_k x[t - ks]$, where $c_1, \ldots, c_d$ are the non-leading coefficients of the monic polynomial $p$ ordered so that $c_k$ is the coefficient of $z^{d-k}$ in $z^d p(1/z)$ (the reciprocal monic polynomial). The default stride is $s = P = 16$.
+
+\paragraph{Monic Chebyshev (first kind), $\tilde T_d(x) = T_d(x)/2^{d-1}$.}
+The classical Chebyshev polynomials satisfy the recurrence $T_0 = 1$, $T_1(x) = x$, $T_{d+1}(x) = 2x T_d(x) - T_{d-1}(x)$. After dividing by the leading coefficient $2^{d-1}$, the monic forms are obtained explicitly. The reciprocal-monic FIR coefficients $(c_1, \ldots, c_d)$ at stride $s$ are listed in Table~\ref{tab:cheb-coeffs}.
+
+\begin{table}[h]
+\centering
+\caption{Monic Chebyshev (first kind): polynomial coefficients $\tilde T_d(x)$ in the monomial basis (descending powers), and the corresponding residual FIR coefficients $(c_1, \ldots, c_d)$ at stride $s = P = 16$. Effective lookback in time-step units is $ks$ for the $k$-th nonzero tap. Boldface marks the default $d = 4$ filter used by \HD{} and \texttt{d4}.}
+\label{tab:cheb-coeffs}
+\small
+\begin{tabular}{rlcl}
+\toprule
+$d$ & $\tilde T_d(x)$ & FIR $(c_1, \ldots, c_d)$ & Residual $\tilde h[t]$ at $s = 16$ \\
+\midrule
+$2$ & $x^2 - \tfrac{1}{2}$                                       & $(0, -\tfrac{1}{2})$                            & $-\tfrac{1}{2} x[t-32]$ \\
+$3$ & $x^3 - \tfrac{3}{4} x$                                     & $(0, -\tfrac{3}{4}, 0)$                         & $-\tfrac{3}{4} x[t-32]$ \\
+$\mathbf{4}$ & $x^4 - x^2 + \tfrac{1}{8}$                        & $\mathbf{(0, -1, 0, \tfrac{1}{8})}$              & $\mathbf{-x[t-32] + \tfrac{1}{8} \, x[t-64]}$ \\
+$5$ & $x^5 - \tfrac{5}{4} x^3 + \tfrac{5}{16} x$                 & $(0, -\tfrac{5}{4}, 0, \tfrac{5}{16}, 0)$       & $-\tfrac{5}{4} x[t-32] + \tfrac{5}{16} x[t-64]$ \\
+$6$ & $x^6 - \tfrac{3}{2} x^4 + \tfrac{9}{16} x^2 - \tfrac{1}{32}$ & $(0, -\tfrac{3}{2}, 0, \tfrac{9}{16}, 0, -\tfrac{1}{32})$ & $-\tfrac{3}{2} x[t-32] + \tfrac{9}{16} x[t-64] - \tfrac{1}{32} x[t-96]$ \\
+$7$ & $x^7 - \tfrac{7}{4} x^5 + \tfrac{14}{16} x^3 - \tfrac{7}{64} x$ & $(0, -\tfrac{7}{4}, 0, \tfrac{14}{16}, 0, -\tfrac{7}{64}, 0)$ & $-\tfrac{7}{4} x[t-32] + \tfrac{7}{8} x[t-64] - \tfrac{7}{64} x[t-96]$ \\
+$8$ & $x^8 - 2 x^6 + \tfrac{5}{4} x^4 - \tfrac{1}{4} x^2 + \tfrac{1}{128}$ & $(0, -2, 0, \tfrac{5}{4}, 0, -\tfrac{1}{4}, 0, \tfrac{1}{128})$ & $-2 x[t-32] + \tfrac{5}{4} x[t-64] - \tfrac{1}{4} x[t-96] + \tfrac{1}{128} x[t-128]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For odd $d$, the residual filter at stride $s$ has a tap at $x[t - 0] = x[t]$ that cancels with the identity term, so the residual contains only \emph{even} lags $2s, 4s, \ldots$, regardless of polynomial parity in $x$. For example, the $d=3$ residual at $s = 16$ is supported only at lag $32$; the $d=5$ residual at $s = 16$ is supported at lags $32$ and $64$.
+
+\paragraph{Monic Chebyshev second kind, $\tilde U_d(x) = U_d(x)/2^d$.}
+Defined by $U_0 = 1$, $U_1(x) = 2x$, $U_{d+1}(x) = 2x U_d(x) - U_{d-1}(x)$. The first few monic forms and corresponding residual FIRs at $s = 16$ are:
+\[
+\begin{aligned}
+\tilde U_2(x) &= x^2 - \tfrac{1}{4}, &\quad \tilde h[t] &= -\tfrac{1}{4} x[t-32], \\
+\tilde U_3(x) &= x^3 - \tfrac{1}{2} x, &\quad \tilde h[t] &= -\tfrac{1}{2} x[t-32], \\
+\tilde U_4(x) &= x^4 - \tfrac{3}{4} x^2 + \tfrac{1}{16}, &\quad \tilde h[t] &= -\tfrac{3}{4} x[t-32] + \tfrac{1}{16} x[t-64].
+\end{aligned}
+\]
+The $\ell_\infty$ norm of monic $\tilde U_d$ on $[-1,1]$ is $1/2^{d-1}$ \citep[Eq.~1.41]{mason2003chebyshev}, twice that of $\tilde T_d$, so the spectral attenuation predicted by the equioscillation argument is half as strong as for the first kind.
+
+\paragraph{Monic Legendre, $\tilde P_d(x) = P_d(x) \cdot 2^d (d!)^2 / (2d)!$.}
+Defined by Bonnet's recurrence $(d+1) P_{d+1}(x) = (2d+1) x P_d(x) - d P_{d-1}(x)$, $P_0 = 1$, $P_1(x) = x$. The leading coefficient of $P_d$ is $(2d)!/(2^d (d!)^2)$, so dividing by it yields the monic form. The first few monic Legendre polynomials and residual FIRs at $s = 16$ are:
+\[
+\begin{aligned}
+\tilde P_2(x) &= x^2 - \tfrac{1}{3}, &\quad \tilde h[t] &= -\tfrac{1}{3} x[t-32], \\
+\tilde P_3(x) &= x^3 - \tfrac{3}{5} x, &\quad \tilde h[t] &= -\tfrac{3}{5} x[t-32], \\
+\tilde P_4(x) &= x^4 - \tfrac{6}{7} x^2 + \tfrac{3}{35}, &\quad \tilde h[t] &= -\tfrac{6}{7} x[t-32] + \tfrac{3}{35} x[t-64].
+\end{aligned}
+\]
+The $\ell_\infty$ norm of monic $\tilde P_d$ on $[-1,1]$ is strictly larger than that of $\tilde T_d$ for all $d \geq 2$: their ratio is $2 \binom{2d}{d}/4^d \to 2/\sqrt{\pi d}$ as $d \to \infty$ (Proposition~\ref{prop:cheb-vs-legendre}). Legendre minimises the $\ell_2$ norm $\bigl(\int_{-1}^{1} p(x)^2 \, dx\bigr)^{1/2}$ rather than the $\ell_\infty$ norm.
+
+\paragraph{Other bases used in ablations.}
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Finite-difference} (degree $d$): $p(z) = (z - 1)^d$. For $d = 4$ at $s = 16$ this expands to $\tilde h[t] = -4 x[t-16] + 6 x[t-32] - 4 x[t-48] + x[t-64]$. Heavy high-pass behaviour, no spectral-attenuation guarantee.
+    \item \textbf{Exponential moving average} (EMA, half-life $\tau$): a one-sided low-pass filter with infinite impulse response $h[k] = (1-\alpha) \alpha^k$, truncated to the window we use. Not polynomial-based.
+    \item \textbf{Learned FIR} (no fixed basis): the model learns the $d = 4$ residual coefficients $(c_1, c_2, c_3, c_4) \in \R^4$ from a Gaussian initialisation jointly with the rest of the network. The learned solution depends on initialisation (Appendix~\ref{app:ablations}, Table~\ref{tab:learned-fir}).
+\end{itemize}
+
+\paragraph{Multi-scale variants.}
+The MS46 and MSHD10 variants stack two polynomial residual channels:
+\begin{itemize}[leftmargin=1.5em]
+    \item \texttt{MS46}: Chebyshev $d = 4$ at $s = 16$ \emph{and} Chebyshev $d = 6$ at $s = 16$, both stripped of the identity term. The two residuals $\tilde h^{(4)}, \tilde h^{(6)}$ are concatenated as separate channels alongside the target and mask, so the per-patch input projection widens from $2P \to d_{\text{model}}$ to $4P \to d_{\text{model}}$.
+    \item \texttt{MSHD10}: same as \texttt{MS46} with $10\%$ per-patch channel dropout applied independently to each residual channel during training.
+\end{itemize}
+
+%==============================================================================
 \section{Domain and Frequency Analysis}
 \label{app:domain}
 %==============================================================================
@@ -1133,15 +1241,15 @@ Latent preconditioning is catastrophic. The filter must operate on the raw time 
 \toprule
 \textbf{Domain} & \textbf{$n$} & \textbf{$\Delta\%$} & \textbf{Wins} \\
 \midrule
-Demographics & 15 & $+9.83\%$ & 13/15 \\
-Transport & 55 & $+6.94\%$ & 47/55 \\
-Energy & 80 & $+3.97\%$ & 56/80 \\
-M4 Competition & 30 & $+3.83\%$ & 23/30 \\
-IT/Cloud & 120 & $+2.23\%$ & 81/120 \\
-ETT (Industrial) & 80 & $+1.50\%$ & 54/80 \\
-Retail/Sales & 20 & $+0.85\%$ & 14/20 \\
-Weather & 75 & $+0.34\%$ & 36/75 \\
-Healthcare & 10 & $+0.24\%$ & 5/10 \\
+Demographics & 15 & $-9.83\%$ & 13/15 \\
+Transport & 55 & $-6.94\%$ & 47/55 \\
+Energy & 80 & $-3.97\%$ & 56/80 \\
+M4 Competition & 30 & $-3.83\%$ & 23/30 \\
+IT/Cloud & 120 & $-2.23\%$ & 81/120 \\
+ETT (Industrial) & 80 & $-1.50\%$ & 54/80 \\
+Retail/Sales & 20 & $-0.85\%$ & 14/20 \\
+Weather & 75 & $-0.34\%$ & 36/75 \\
+Healthcare & 10 & $-0.24\%$ & 5/10 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1156,18 +1264,18 @@ The benefit is consistent with the mechanism, although we caution that the relev
 \toprule
 \textbf{Frequency} & \textbf{$n$} & \textbf{$\Delta\%$} & \textbf{Wins} \\
 \midrule
-Sub-hourly & 180 & $+3.40\%$ & 121/180 \\
-Hourly & 155 & $+3.80\%$ & 113/155 \\
-Daily & 75 & $+0.76\%$ & 46/75 \\
-Weekly & 40 & $+0.73\%$ & 29/40 \\
-Monthly & 25 & $+3.41\%$ & 13/25 \\
-Quarterly & 5 & $+0.24\%$ & 3/5 \\
-Yearly & 5 & $+5.92\%$ & 4/5 \\
+Sub-hourly & 180 & $-3.40\%$ & 121/180 \\
+Hourly & 155 & $-3.80\%$ & 113/155 \\
+Daily & 75 & $-0.76\%$ & 46/75 \\
+Weekly & 40 & $-0.73\%$ & 29/40 \\
+Monthly & 25 & $-3.41\%$ & 13/25 \\
+Quarterly & 5 & $-0.24\%$ & 3/5 \\
+Yearly & 5 & $-5.92\%$ & 4/5 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Prediction horizon.} The benefit increases with prediction length: $+1.4\%$ for short horizons to $+5.1\%$ for long horizons. Longer horizons require more temporal structure, which the preconditioning channel provides.
+\paragraph{Prediction horizon.} The benefit increases with prediction length: $-1.4\%$ for short horizons to $-5.1\%$ for long horizons (more negative = larger MASE reduction). Longer horizons require more temporal structure, which the preconditioning channel provides.
 
 %==============================================================================
 \section{Horizon Analysis: \Dnodrop{} vs.\ \HD{}}
@@ -1231,13 +1339,13 @@ On short horizons \Dnodrop{} and \HD{} are within $0.4\%$ of each other; on medi
 \toprule
 \textbf{Seed} & \textbf{BL@2e-3} & \textbf{\HD{}@2e-3} & \textbf{$\Delta\%$} & \textbf{Wins/97} \\
 \midrule
-0 & 0.8424 & 0.8339 & $+1.01\%$ & 57 \\
-1 & 0.8442 & 0.8338 & $+1.23\%$ & 55 \\
-2 & 0.8378 & 0.8468 & $-1.07\%$ & 46 \\
-7 & 0.8339 & 0.8350 & $-0.13\%$ & 54 \\
-42 & 0.8526 & 0.8307 & $+2.55\%$ & 68 \\
+0 & 0.8424 & 0.8339 & $-1.01\%$ & 57 \\
+1 & 0.8442 & 0.8338 & $-1.23\%$ & 55 \\
+2 & 0.8378 & 0.8468 & $+1.07\%$ & 46 \\
+7 & 0.8339 & 0.8350 & $+0.13\%$ & 54 \\
+42 & 0.8526 & 0.8307 & $-2.55\%$ & 68 \\
 \midrule
-\textbf{Mean} & \textbf{0.8422} & \textbf{0.8361} & \textbf{$+0.72\%$} & \textbf{280/485} \\
+\textbf{Mean} & \textbf{0.8422} & \textbf{0.8361} & \textbf{$-0.72\%$} & \textbf{280/485} \\
 \textbf{Std} & 0.0071 & 0.0062 & $1.38\%$ & --- \\
 \bottomrule
 \end{tabular}
@@ -1352,6 +1460,7 @@ To verify that our findings generalize beyond GIFT-Eval, we evaluate on FEV-Benc
 %==============================================================================
 \section{Comparison to Official Moirai 2.0}
 \label{app:official}
+\label{app:official-moirai}
 %==============================================================================
 
 Our retrained Baseline differs from the official Moirai-2.0-R-Small release due to substantially smaller training compute:

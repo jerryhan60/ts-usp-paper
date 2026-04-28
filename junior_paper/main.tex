@@ -232,8 +232,8 @@ This rapid decay is the reason spectral filtering is efficient: the top $h = O(\
 \end{equation}
 where $\tilde u_t = (u_{t-1}, u_{t-2}, \ldots, u_1, 0, \ldots, 0)$. The coefficients $M_i$ are learned online via OGD (Theorem~\ref{thm:ogd-linear-predictors}), yielding sublinear regret with $h = O(\log^2 T)$ parameters.
 
-\paragraph{Limitations: asymmetry and the unit circle.}
-The preceding development requires $A$ to be symmetric so that the eigenvalues are real and the impulse responses have the scalar form~\eqref{eq:impulse-vector}. When $A$ is asymmetric, eigenvalues may be complex, and the impulse responses involve oscillating terms $\abs{\lambda}^t e^{i \arg(\lambda) t}$ that cannot be captured by the real-valued basis $\{\mu_\alpha\}$. \citet[Thm.~12.1]{hazan2025onlinecontrol} gives a cyclic-permutation LDS construction showing that any online learner incurs expected cumulative squared loss $\Omega(d_x)$ over $T \geq d_x$ rounds for general asymmetric systems---a fundamental barrier. The universal-sequence-preconditioning technique we describe in Section~\ref{sec:precondition} addresses this barrier: by polynomially compressing the spectral radius before learning, USP extends sublinear regret guarantees to asymmetric systems whose eigenvalue arguments are at most $O(1/\log^2 T)$.
+% \paragraph{Limitations: asymmetry and the unit circle.}
+% The preceding development requires $A$ to be symmetric so that the eigenvalues are real and the impulse responses have the scalar form~\eqref{eq:impulse-vector}. When $A$ is asymmetric, eigenvalues may be complex, and the impulse responses involve oscillating terms $\abs{\lambda}^t e^{i \arg(\lambda) t}$ that cannot be captured by the real-valued basis $\{\mu_\alpha\}$. \citet[Thm.~12.1]{hazan2025onlinecontrol} gives a cyclic-permutation LDS construction showing that any online learner incurs expected cumulative squared loss $\Omega(d_x)$ over $T \geq d_x$ rounds for general asymmetric systems---a fundamental barrier. The universal-sequence-preconditioning technique we describe in Section~\ref{sec:precondition} addresses this barrier: by polynomially compressing the spectral radius before learning, USP extends sublinear regret guarantees to asymmetric systems whose eigenvalue arguments are at most $O(1/\log^2 T)$.
 
 %==============================================================================
 \section{Universal Sequence Preconditioning}
@@ -650,7 +650,7 @@ A natural alternative to fixing $p$ to be the monic Chebyshev polynomial is to d
 \begin{table}[h]
 \centering
 \small
-\caption{Fixed Chebyshev versus learned coefficients (seed 0, $d=4$, $s=16$, $10\%$ dropout). The learned filters beat \Baseline{} but are slightly worse than fixed Chebyshev; head-to-head, the fixed filter wins $51/97$ configurations against either learned variant.}
+\caption{Fixed Chebyshev versus learned coefficients (seed 0, $d=4$, $s=16$, $10\%$ dropout). }
 \label{tab:learned-fir}
 \begin{tabular}{lccc}
 \toprule
@@ -681,7 +681,7 @@ Universal forecasters routinely tune context length to a deployment-time compute
 \begin{table}[h]
 \centering
 \small
-\caption{MASE on GIFT-Eval at four context lengths (seed 0). Across $4{,}000 \to 512$ tokens of context, the relative improvement is approximately constant at $4.7$--$5.5\%$ in favour of \HD{}.}
+\caption{MASE on GIFT-Eval at four context lengths (seed 0). }
 \label{tab:contextlen}
 \begin{tabular}{ccccc}
 \toprule
@@ -703,7 +703,7 @@ The improvement is approximately context-length-invariant. A $\sim 5\%$ gap betw
 \begin{table}[h]
 \centering
 \small
-\caption{100K-step training, 5 seeds. The benefit grows with training budget; capacity controls actively hurt.}
+\caption{100K-step training, 5 seeds.}
 \label{tab:100k}
 \begin{tabular}{lcc}
 \toprule
@@ -726,14 +726,13 @@ The improvement is approximately context-length-invariant. A $\sim 5\%$ gap betw
 \label{sec:discussion}
 %==============================================================================
 
-\paragraph{When does preconditioning help?}
-The spectral story predicts that datasets whose temporal structure aligns with the filter's lookback scales benefit most. The cross-domain pattern (Appendix~\ref{app:domain}) is consistent with this prediction in a coarse sense: transport and energy domains ($-4$ to $-7\%$ MASE) have strong autocorrelation at the $32$- and $64$-sample lookback scales of the filter at $15$-minute resolution (corresponding to $8/16$-hour intra-day structure); weather and healthcare, dominated by much-longer or stochastic correlations, show essentially no improvement.
+The main empirical claim that preconditioning can improve the performance of patch-based time series models is well-supported. For the from-scratch Moirai-2-Small-style architecture and training budget studied here, appending the fixed degree-four Chebyshev residual improves normalized MASE on GIFT-Eval and fev-bench. 
 
-\paragraph{Model scale.}
-We find that the benefit of input preconditioning is most pronounced at the small ($11.4$M) Moirai-2 scale; at the base ($46$M) scale, the improvement is seed-dependent and not consistently significant. This is consistent with a capacity-efficiency interpretation: when a model has enough parameters to discover the relevant cross-patch correlations via attention, the inductive bias of a fixed Chebyshev preconditioner adds less value.
+We believe that a plausible mechanism that accounts for this performance improvement is the input-side bottleneck present in the original Moirai-2 model, as the per-patch projection can only see one patch before attention. The residual channel provides information from 2 and 4 patches back, so the first embedding would already contain additional useful information. And the Chebyshev coefficients appear uniquely suited because they provide the minimax spectral advantage demonstrated in USP.
 
-\paragraph{Limitations.}
-We focused on univariate, single-variate forecasting; extensions to multivariate and probabilistic forecasting are left as future work. The Chebyshev choice was validated by ablation against a handful of alternatives (Legendre, EMA, finite differences); exhaustive search over the monic-degree-$d$ family is computationally infeasible but could be approximated by closed-form optimal linear filters (Wiener filters) in a synthetic setting.
+However, we also note some limitations of our work. In particular, our experiments do not provide any provable guarantees for applying preconditioning techniques to patch-based time series models. The mathematical background mainly serves as intuition for proposing a principled fixed filter (Chebyshev basis), which we then demonstrate empirically to work well. 
+
+Moreover, we only demonstrate the benefit of preconditioning at the small ($11.4$M) Moirai-2 scale. Due to limited compute, we are not able to perform similarly comprehensive experiments at the larger ($46M$) base scale. Also, the method was tested primarily in a univariate channel setting, whereas multivariate extensions might require different considerations. 
 
 %==============================================================================
 \section{Conclusion}

@@ -1,4 +1,4 @@
-\begin{thebibliography}{24}
+\begin{thebibliography}{25}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -22,10 +22,18 @@ Andreas Auer, Patrick Podest, Daniel Klotz, Sebastian B{\"o}ck, G{\"u}nter
   (FMSD)}, 2025.
 \newblock URL \url{https://openreview.net/forum?id=cWrbpOZGRa}.
 
-\bibitem[Das et~al.(2024)Das, Kong, Leber, Mathews, and Sen]{das2024decoder}
+\bibitem[Das et~al.(2024{\natexlab{a}})Das, Kong, Leber, Mathews, and
+  Sen]{das2024timesfm}
+Abhimanyu Das, Weihao Kong, Andrew Leber, Rajat Mathews, and Raghuram Sen.
+\newblock A decoder-only foundation model for time-series forecasting.
+\newblock In \emph{International Conference on Machine Learning (ICML)},
+  2024{\natexlab{a}}.
+
+\bibitem[Das et~al.(2024{\natexlab{b}})Das, Kong, Leber, Mathews, and
+  Sen]{das2024decoder}
 Abhimanyu Das, Weihao Kong, Andrew Leber, Rajat Mathews, and Ruhan Sen.
 \newblock A decoder-only foundation model for time-series forecasting.
-\newblock In \emph{ICML}, 2024.
+\newblock In \emph{ICML}, 2024{\natexlab{b}}.
 
 \bibitem[Davis(1975)]{davis1975interpolation}
 Philip~J. Davis.

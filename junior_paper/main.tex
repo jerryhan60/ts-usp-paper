@@ -8,6 +8,8 @@
 \usepackage{booktabs}
 \usepackage{microtype}
 \usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algorithmic}
 \usepackage{natbib}
 \usepackage{xcolor}
 \usepackage{hyperref}
@@ -127,7 +129,7 @@ We retrain the Moirai-2 Small encoder~\citep{liu2024moirai2} ($11.4$M parameters
 \paragraph{Contributions and outline.}
 The remainder of this paper develops the following contributions:
 \begin{enumerate}[leftmargin=1.5em, topsep=0.2em, itemsep=0.2em]
-  \item A self-contained mathematical treatment (Sections~\ref{sec:preliminaries}--\ref{sec:precondition}) of universal sequence preconditioning specialised from online LDS prediction to patch-based transformer forecasting, including: the Marsden--Hazan algebraic identity, the Chebyshev equioscillation theorem (Theorem~\ref{thm:chebyshev-minimax}), a closed-form derivation of our filter's frequency response (Theorem~\ref{thm:freq-response}), a BIBO-stability lemma (Lemma~\ref{lem:stability}), and a quantitative spectral--noise tradeoff (Figure~\ref{fig:spectral-noise-tradeoff}) that motivates the choice of filter degree.
+  \item A self-contained mathematical treatment (Sections~\ref{sec:preliminaries}--\ref{sec:precondition}) of universal sequence preconditioning specialised from online LDS prediction to patch-based transformer forecasting, including: the Marsden--Hazan algebraic identity, the Chebyshev minimax theorem (Theorem~\ref{thm:chebyshev-minimax}), the USP algorithm (Algorithm~\ref{alg:usp-regression}), and the regret bound proving hidden-dimension-independent $\tilde O(T^{-2/13})$ convergence (Theorems~\ref{thm:usp-general} and~\ref{thm:usp-chebyshev}).
   \item A self-contained description (Section~\ref{sec:patch-transformers}) of the Moirai-2 architecture, its prefix-LM pretraining objective, the LOTSA training corpus, the multi-token inference procedure, the GIFT-Eval evaluation protocol with a rigorous definition of the MASE metric, and the architectural modification implementing our method (Section~\ref{sec:method}).
   \item An empirical evaluation (Section~\ref{sec:empirical}) on the GIFT-Eval benchmark, in which polynomial input preconditioning improves a capacity-limited patch-based transformer's $\overline{\mathrm{MASE}^*}$ by $\Delta\mathrm{MASE}^* = -2.9\%$, supplemented by extensive capacity-control and filter ablations, an independent FEV-Bench cross-benchmark check, context-length and 100K-step extensions, and per-domain/per-frequency analyses.
 \end{enumerate}
@@ -256,28 +258,13 @@ Spectral filtering replaces a long raw-history basis by a compressed basis tailo
 
 The preceding stable-system picture becomes significantly less favourable when eigenvalues approach the unit circle, and even more so when $A$ is asymmetric. \citet[Thm.~12.1]{hazan2025onlinecontrol} gives a cyclic-permutation LDS construction in which any online learner incurs expected cumulative squared loss $\Omega(d_x)$ over $T \geq d_x$ rounds before the hidden state is revealed. The asymmetric extension of spectral filtering is more delicate; the universal-sequence-preconditioning technique we describe in Section~\ref{sec:precondition} is one approach to this regime, and is the immediate mathematical foundation of our method.
 
-\subsection{Chebyshev Polynomials}
-\label{sec:chebyshev-prelim}
-
-The \emph{Chebyshev polynomials of the first kind}, denoted $T_d(z)$ for $d \in \Z_{\geq 0}$, are defined by the recurrence
-\begin{equation}
-    T_0(z) = 1, \quad T_1(z) = z, \quad T_{d+1}(z) = 2 z \, T_d(z) - T_{d-1}(z),
-    \label{eq:cheb-recurrence}
-\end{equation}
-or equivalently by the trigonometric identity $T_d(\cos \theta) = \cos(d \theta)$. The first several polynomials are $T_2(z) = 2z^2 - 1$, $T_3(z) = 4z^3 - 3z$, $T_4(z) = 8z^4 - 8z^2 + 1$. The leading coefficient of $T_d$ is $2^{d-1}$, so the \emph{monic Chebyshev polynomial} is $\tilde T_d(z) = T_d(z) / 2^{d-1}$. For $d = 4$,
-\[
-    \tilde T_4(z) = z^4 - z^2 + \tfrac{1}{8}.
-\]
-
-Chebyshev polynomials possess several extremal properties; one of the most celebrated is the \emph{equioscillation property} underlying the approximation theorem we state in Section~\ref{sec:chebyshev}.
-
 %==============================================================================
 \section{Universal Sequence Preconditioning}
 \label{sec:precondition}
 \label{sec:chebyshev}
 %==============================================================================
 
-\citet{marsden2024universal} introduced a polynomial-preconditioning framework that yields the first sublinear, hidden-dimension-independent regret bounds for online prediction in marginally-stable LDSs. The mechanism: convolving the observation sequence with a fixed degree-$d$ monic polynomial $p$ is algebraically equivalent to multiplying the hidden dynamics by $p^*(A)$, where $p^*(z) := z^d p(1/z)$ is the reciprocal polynomial; choosing $p$ to be the monic Chebyshev polynomial then minimax-optimally compresses the spectral radius the downstream learner faces. We extract from this framework the analytic ingredients needed for our patch-based forecasting setting: the algebraic identity (Section~\ref{sec:lds-identity}), the Chebyshev minimax theorem and its corollary on spectral compression (Section~\ref{sec:cheb-minimax}), the frequency response and stability properties of the resulting FIR filter (Section~\ref{sec:freq-response-section}), and the spectral--noise tradeoff that determines a heuristic optimal degree (Section~\ref{sec:noise-gain}). The full Marsden--Hazan regret machinery---a careful summation of the spectral residual under marginal stability---is not used in our analysis; the reader interested in those rates is referred to \citet[Thms.~3 and~5]{marsden2024universal}.
+\citet{marsden2024universal} introduced a polynomial-preconditioning framework that yields the first sublinear, hidden-dimension-independent regret bounds for online prediction in marginally-stable LDSs. The mechanism: convolving the observation sequence with a fixed degree-$d$ monic polynomial $p$ is algebraically equivalent to multiplying the hidden dynamics by $p^*(A)$, where $p^*(z) := z^d p(1/z)$ is the reciprocal polynomial; choosing $p$ to be the monic Chebyshev polynomial then minimax-optimally compresses the spectral radius the downstream learner faces. This section presents the analytic ingredients of the framework: the algebraic identity linking polynomial convolution to spectral compression (Section~\ref{sec:lds-identity}), the Chebyshev polynomials and their minimax property (Sections~\ref{sec:chebyshev-prelim}--\ref{sec:cheb-minimax}), the USP algorithm (Section~\ref{sec:usp-algorithm}), and the resulting regret bounds (Section~\ref{sec:usp-regret}).
 
 \subsection{Polynomial Preconditioning of LDS Observations}
 \label{sec:lds-identity}
@@ -302,6 +289,20 @@ Our setting differs from the LDS online-prediction setting in three ways: (i) th
 \end{equation}
 alongside the original $x$. We work with the residual rather than the full filter output because the original signal is already provided by the unmodified target channel; the residual captures the \emph{novel} cross-patch information injected by preconditioning. Despite the differences from the original LDS setting, the spectral intuition transfers: a Chebyshev preconditioner shapes the input's spectrum minimax-optimally, and a patch-based transformer facing a signal whose spectrum has been shaped to highlight multi-patch correlations is plausibly better-equipped to capture them.
 
+\subsection{Chebyshev Polynomials}
+\label{sec:chebyshev-prelim}
+
+Before stating the minimax property that motivates the choice of $p$, we record the definition and basic facts. The \emph{Chebyshev polynomials of the first kind}, denoted $T_d(z)$ for $d \in \Z_{\geq 0}$, are defined by the recurrence
+\begin{equation}
+    T_0(z) = 1, \quad T_1(z) = z, \quad T_{d+1}(z) = 2 z \, T_d(z) - T_{d-1}(z),
+    \label{eq:cheb-recurrence}
+\end{equation}
+or equivalently by the trigonometric identity $T_d(\cos \theta) = \cos(d \theta)$. The first several polynomials are $T_2(z) = 2z^2 - 1$, $T_3(z) = 4z^3 - 3z$, $T_4(z) = 8z^4 - 8z^2 + 1$. The leading coefficient of $T_d$ is $2^{d-1}$, so the \emph{monic Chebyshev polynomial} is $\tilde T_d(z) = T_d(z) / 2^{d-1}$. For $d = 4$,
+\[
+    \tilde T_4(z) = z^4 - z^2 + \tfrac{1}{8}.
+\]
+Two further facts will be used below. First, the trigonometric definition makes Chebyshev polynomials \emph{equioscillate} on $[-1,1]$: $\tilde T_d$ attains its $L^\infty$ norm $2^{1-d}$ with alternating signs at the $d{+}1$ extremal points $x_k = \cos(k\pi/d)$, $k = 0, \ldots, d$. Second, the monomial-basis coefficients of $\tilde T_d$ have $\ell^1$ norm $\norm{\boldsymbol{a}^{(d)}}_1 \leq 2^{0.3d}$ for all $d \geq 1$ \citep[Lem.~3.2]{marsden2024universal}; this controls the noise gain of the preconditioning filter and enters the regret bound of Section~\ref{sec:usp-regret} as the comparator-class diameter.
+
 \subsection{Chebyshev Minimax}
 \label{sec:cheb-minimax}
 
@@ -325,94 +326,80 @@ For diagonalisable $A$ with real spectrum in $[-\rho, \rho]$, the choice $q(\lam
 \]
 \end{corollary}
 
-\subsection{Frequency Response, Stability, and Residual Filter}
-\label{sec:freq-response-section}
+\subsection{The USP Algorithm}
+\label{sec:usp-algorithm}
 
-For our patch-based setting, the filter is applied at stride $s = P$ and we use the reciprocal monic Chebyshev $p(z) := \tilde T_d^*(z) = z^d \tilde T_d(1/z)$. For $d=4$ explicitly: $p(z) = 1 - z^2 + z^4/8$. Let $H(\omega) := p(e^{-j 2\pi s \omega})$ denote the DTFT of the stride-$s$ filter.
+With the Chebyshev minimax property in hand, we can state the USP algorithm of \citet{marsden2024universal}. The starting point is the three-term decomposition of the LDS output. For a system~\eqref{eq:lds} with inputs $u_1, \ldots, u_T$ and monic preconditioning polynomial $p_n^c(z) = \sum_{i=0}^{n} c_i z^{n-i}$ with $c_0 = 1$, one obtains
+\begin{equation}
+    y_t \;=\; \underbrace{-\sum_{i=1}^{n} c_i\, y_{t-i}}_{\aleph_0\text{ (preconditioning)}}
+    \;+\; \underbrace{\sum_{s=0}^{n-1} \sum_{i=0}^{s} c_i\, C A^{s-i} B\, u_{t-s}}_{\aleph_1\text{ (learnable)}}
+    \;+\; \underbrace{\sum_{s=0}^{t-n-1} C\, p_n^c(A)\, A^s B\, u_{t-n-s}}_{\aleph_2\text{ (residual error)}}.
+    \label{eq:three-term}
+\end{equation}
+The term $\aleph_0$ is the universal preconditioning component: it depends only on the coefficients $c_{1:n}$ (not on $A$, $B$, or $C$) and can be computed from observed outputs alone. The term $\aleph_1$ involves a bounded number of parameters that can be learned via convex regression. The critical term $\aleph_2$ contains $p_n^c(A)$; if $p_n^c$ is chosen to have small supremum on the spectrum of $A$, this error term is small.
 
-\begin{theorem}[Frequency response]
-\label{thm:freq-response}
-Let $p = \tilde T_d^*$ and $H(\omega) = p(e^{-j 2\pi s \omega})$. Then:
-\begin{enumerate}[leftmargin=1.5em, itemsep=0.1em]
-    \item $\abs{H(\omega)}^2$ is a real trigonometric polynomial in $\cos(2\pi s\omega)$ of degree $d$, periodic in $\omega$ with period $1/s$.
-    \item $H$ has no zeros on the unit circle: the real roots of $\tilde T_d$ lie in $(-1,1)$, so the roots of $\tilde T_d^*$ lie outside $\{\abs{z}=1\}$.
-    \item For even $d$, at the harmonics $\omega_k := k/(2s)$, $k \in \Z$, the magnitude attains the Chebyshev minimax constant
-    \begin{equation}
-        \abs{H(\omega_k)} \;=\; \abs{p(\pm 1)} \;=\; 2^{\,1-d},
-        \label{eq:min-magnitude}
-    \end{equation}
-    and these are critical points of $\abs{H(\omega)}^2$.
-\end{enumerate}
+\begin{algorithm}[t]
+\caption{Universal Sequence Preconditioning for Regression \citep[Alg.~2]{marsden2024universal}}
+\label{alg:usp-regression}
+\begin{algorithmic}[1]
+\REQUIRE Initial parameters $Q_0$; preconditioning coefficients $c_{0:n}$ from the $n$-th degree monic Chebyshev polynomial; convex constraint set $\mathcal{K} = \{(Q_0, \ldots, Q_{n-1}) : \norm{Q_j} \leq C_{\mathrm{domain}} \norm{\boldsymbol{c}}_1\}$.
+\STATE Assert $c_0 = 1$.
+\FOR{$t = 1$ \TO $T$}
+    \STATE Receive input $u_t$.
+    \STATE Predict $\hat y_t(Q^t) = -\sum_{i=1}^{n} c_i\, y_{t-i} + \sum_{j=0}^{n} Q_j^t\, u_{t-j}$.
+    \STATE Observe $y_t$; suffer loss $\ell_t(Q^t) = \norm{\hat y_t(Q^t) - y_t}_1$.
+    \STATE Update: $Q^{t+1} \leftarrow \mathrm{proj}_{\mathcal{K}}\!\bigl(Q^t - \eta_t \nabla_Q \ell_t(Q^t)\bigr)$.
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+Algorithm~\ref{alg:usp-regression} instantiates USP with convex regression. The predictor subtracts the preconditioning term $\aleph_0$ from the target and learns the $\aleph_1$ term via projected online gradient descent; the residual $\aleph_2$ is treated as an unlearnable error.
+
+\citet{marsden2024universal} also introduce a second, more powerful instantiation that combines preconditioning with spectral filtering (their Algorithm~3). Spectral filtering learns both $\aleph_1$ and $\aleph_2$, which yields a better regret rate of $\tilde O(T^{-3/13})$ compared to $\tilde O(T^{-2/13})$ for regression alone (see Theorems~\ref{thm:usp-general} and~\ref{thm:usp-chebyshev} below). In both cases, the preconditioning polynomial shrinks the learnable domain, making the online optimisation problem easier.
+
+\subsection{The USP Regret Bound}
+\label{sec:usp-regret}
+
+The central theoretical result of \citet{marsden2024universal} is that USP with Chebyshev coefficients achieves sublinear, hidden-dimension-independent regret for online prediction in marginally-stable LDSs. We state the general form first, then the Chebyshev specialisation.
+
+\begin{theorem}[USP regression regret; general polynomial {\citep[Thm.~D.1]{marsden2024universal}}]
+\label{thm:usp-general}
+Let $\{u_t\}_{t=1}^T \subset \R^{d_{\mathrm{in}}}$ with $\norm{u_t}_2 \leq 1$, and let $\{y_t\}_{t=1}^T$ be the output of an LDS $(A, B, C)$ with $\norm{B}\norm{C}\kappa \leq C_{\mathrm{domain}}$, where $\kappa = \norm{P}\norm{P^{-1}}$ for a diagonalisation $A = P D P^{-1}$. Then Algorithm~\ref{alg:usp-regression} with any monic degree-$n$ polynomial $p_n^c$ satisfies
+\begin{equation}
+    \sum_{t=1}^{T} \norm{\hat y_t - y_t}_1 \;\leq\; C_{\mathrm{domain}} \!\left[\; \tfrac{3}{2}\, n^2 \sqrt{d_{\mathrm{out}}}\, \norm{\boldsymbol{c}}_1 \sqrt{T} \;+\; \max_{\lambda \in \mathrm{spec}(A)} \abs{p_n^c(\lambda)}\, T^2 \;\right].
+    \label{eq:usp-regret-general}
+\end{equation}
 \end{theorem}
 
-\begin{proof}
-Part (i) follows by expanding $\abs{H}^2 = H\bar H$ and grouping conjugate pairs $a_k a_\ell e^{j(k-\ell)\phi}$, $\phi = 2\pi s\omega$, then applying the Chebyshev identity $\cos(n\phi) = T_n(\cos\phi)$. Part (ii) is the algebraic fact that reciprocation $z \mapsto 1/z$ sends real roots in $(-1,1)\setminus\{0\}$ to reals with $\abs{z} > 1$. Part (iii): for even $d$, odd-degree coefficients of $\tilde T_d$ vanish, so $p(\pm 1) = T_d(\pm 1)/2^{d-1} = 2^{1-d}$, and at $\omega_k$ we have $e^{-j 2\pi s \omega_k} = (-1)^k$.
+\begin{proof}[Proof outline]
+The bound is the sum of two terms. The first is the online-gradient-descent (OGD) regret $\frac{3}{2} G D \sqrt{T}$ of \citet[Thm.~3.1]{hazan2025onlinecontrol} applied to the loss sequence $\ell_t(Q) = \norm{\hat y_t(Q) - y_t}_1$ over the convex set $\mathcal{K}$. The diameter is $D \leq 2 C_{\mathrm{domain}} n \norm{\boldsymbol{c}}_1$ (each $\norm{Q_j} \leq C_{\mathrm{domain}} n \norm{\boldsymbol{c}}_1$ by the constraint set) and the gradient bound is $G \leq n \sqrt{d_{\mathrm{out}}}$ (since $\norm{\nabla_{Q_i} \ell_t}_F \leq \sqrt{d_{\mathrm{out}}} \norm{u_{t-i}}_2 \leq \sqrt{d_{\mathrm{out}}}$). The second term bounds the comparator's loss. Setting $\hat Q_s = \sum_{i=0}^{s} c_i C A^{s-i} B$ makes $\hat Q \in \mathcal{K}$ (since $C_{\mathrm{domain}} \geq \norm{C}\norm{B}\kappa$), and the prediction error at $\hat Q$ reduces to the $\aleph_2$ tail: $\norm{\hat y_t(\hat Q) - y_t}_1 \leq \norm{C}\norm{B}\kappa \cdot \max_\lambda \abs{p_n^c(\lambda)} \cdot T$. Summing over $T$ rounds gives the $T^2$ term.
 \end{proof}
 
-For our default setting $d = 4$, $s = 16$: the attenuation harmonics lie at $\omega \in \{0, 1/32, 1/16, 3/32, \ldots\}$ with $\abs{H(\omega_k)} = 1/8$. The filter's two non-trivial taps are at lags $2s = 32$ and $4s = 64$ time steps---two and four patches in the past for $P = 16$.
+The two terms in~\eqref{eq:usp-regret-general} exhibit the fundamental tradeoff: $\norm{\boldsymbol{c}}_1$ (which controls the OGD regret) competes with $\max_\lambda \abs{p_n^c(\lambda)}$ (which controls the comparator error). Choosing $p_n^c$ to be the monic Chebyshev polynomial resolves this tradeoff optimally.
 
-\begin{lemma}[BIBO stability and variance bound]
-\label{lem:stability}
-Let $h_t = (\tilde T_d^*(B_s) x)_t$ for an input $x$ with $\sup_t \abs{x_t} \leq M$ and $\Var(x_t) \leq \sigma^2$. Then
+\begin{theorem}[USP regression with Chebyshev coefficients {\citep[Thm.~2.1]{marsden2024universal}}]
+\label{thm:usp-chebyshev}
+Under the hypotheses of Theorem~\ref{thm:usp-general}, if additionally $\max_{j \in [d_h]} \abs{\arg(\lambda_j)} \leq (64 \log_2(8T^{3/2}/(3\sqrt{d_{\mathrm{out}}})))^{-2}$ and the coefficients $c_{0:n}$ are those of the $n$-th monic Chebyshev polynomial, then
 \[
-    \sup_t \abs{h_t} \;\leq\; C_d M, \qquad \Var(h_t) \;\leq\; C_d^2 \sigma^2, \qquad C_d := \sum_{k=0}^{d} \abs{a_k}.
+    \frac{1}{T} \sum_{t=1}^{T} \norm{\hat y_t - y_t}_1 \;\leq\; \tilde O\!\left(\frac{C_{\mathrm{domain}} \sqrt{d_{\mathrm{out}}}}{T^{2/13}}\right),
 \]
-For $d = 4$, $C_4 = 1 + 1 + 1/8 = 2.125$, so $\sup_t \abs{h_t} \leq 2.125 M$ and $\Var(h_t) \leq 4.52 \sigma^2$.
-\end{lemma}
+where $\tilde O(\cdot)$ hides polylogarithmic factors in $T$.
+\end{theorem}
 
-\noindent The lemma is immediate from the triangle inequality applied to $h_t = \sum_k a_k x_{t-ks}$ and ensures that the preconditioning channel does not cause pathological numerical behaviour.
+\begin{proof}[Proof sketch]
+By Theorem~\ref{thm:usp-general}, it suffices to bound $\norm{\boldsymbol{c}}_1$ and $\max_\lambda \abs{p_n^c(\lambda)}$ for the monic Chebyshev polynomial. Lemma~3.2 of \citet{marsden2024universal} gives $\norm{\boldsymbol{c}}_\infty \leq 2^{0.3n}$, hence $\norm{\boldsymbol{c}}_1 \leq (n+1) \cdot 2^{0.3n}$. For the spectral bound, Lemma~3.1 of \citet{marsden2024universal} shows that $\max_\lambda \abs{\tilde T_n(\lambda)} \leq 2^{-(n-2)}$ when each eigenvalue $\lambda$ satisfies $\abs{\arg(\lambda)} \leq 1/(64n^2)$. Substituting into~\eqref{eq:usp-regret-general} and optimising over $n$ gives $n^* = \Theta(\log^{2/13} T)$, yielding the $T^{-2/13}$ rate.
+\end{proof}
 
-\paragraph{The residual filter.}
-The model receives the residual $r_t = ((p - 1)(B_s) x)_t$, not the raw filter output. Its DTFT is $\widetilde H(\omega) = H(\omega) - 1$, a band-pass-like operator that passes (gain $\geq 1$) frequencies where $H$ has gain $\geq 2$ and attenuates frequencies that $H$ attenuates. Specifically:
-
-\begin{proposition}[Residual filter at the attenuation harmonics]
-\label{prop:residual-filter}
-At the harmonics $\omega_k = k/(2s)$ of Theorem~\ref{thm:freq-response},
-\[
-    \abs{\widetilde H(\omega_k)} \;=\; \abs{H(\omega_k) - 1} \;=\; \abs{2^{1-d} - 1}.
-\]
-For $d = 4$, $\abs{\widetilde H(\omega_k)} = 7/8$.
-\end{proposition}
-
-\subsection{The Spectral--Noise Tradeoff}
-\label{sec:noise-gain}
-
-The spectral compression of Theorem~\ref{thm:chebyshev-minimax} comes at a cost: the filter $\tilde T_d^*(B_s)$ amplifies independent additive noise by a factor proportional to $\norm{\boldsymbol{a}^{(d)}}_2^2$, the squared $\ell^2$ norm of the monic Chebyshev coefficients $(a_0, a_1, \ldots, a_d)$ in the monomial basis. The exact values (rational fractions) for $d = 0, \ldots, 8$ are
-\[
-    \norm{\boldsymbol{a}^{(d)}}_2^2 \;=\; 1,\; 1,\; \tfrac{5}{4},\; \tfrac{25}{16},\; \tfrac{129}{64},\; \tfrac{681}{256},\; \tfrac{3653}{1024},\; \tfrac{19825}{4096},\; \tfrac{108545}{16384},
-\]
-with consecutive ratios approaching $\alpha := ((1+\sqrt{2})/2)^2 = (3 + 2\sqrt{2})/4 \approx 1.4571$. The squared $L^\infty$ spectral-compression bound, in contrast, decays at the faster rate $\sup_{[-1,1]}\abs{\tilde T_d}^2 = 4^{1-d}$ (Theorem~\ref{thm:chebyshev-minimax}). Their ratio---the natural ``signal-to-noise leverage'' of the filter---therefore decays as $(\alpha/4)^d \approx 0.364^d$, exponentially in $d$.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.85\linewidth]{figures/spectral_noise_tradeoff.pdf}
-\caption{Theoretical spectral-compression vs.\ noise-gain tradeoff for monic Chebyshev preconditioning $\tilde T_d$ on $[-1,1]$, plotted against filter degree $d$ on a logarithmic vertical axis. The squared $L^\infty$ spectral bound $\sup_{[-1,1]}\abs{\tilde T_d}^2 = 4^{1-d}$ (blue) decays geometrically at rate $1/4$ per unit $d$; the noise-gain norm $\norm{\boldsymbol{a}^{(d)}}_2^2$ (red) grows geometrically at rate $\alpha = (3 + 2\sqrt{2})/4 \approx 1.457$. Their ratio (green, dashed) is the leverage of preconditioning---spectral benefit per unit of noise-gain cost---and decays as $(\alpha/4)^d \approx 0.364^d$. By $d = 4$ the spectral term has been compressed by a factor of $1/64$ while the noise gain is only $\sim 2\times$ larger than no preconditioning, a $\sim 32\times$ leverage; by $d \geq 7$ the leverage saturates at a numerically negligible level relative to the small additional gain in spectral compression.}
-\label{fig:spectral-noise-tradeoff}
-\end{figure}
-
-Figure~\ref{fig:spectral-noise-tradeoff} visualises the tradeoff. Two qualitative facts are worth noting. First, the spectral curve dominates the noise-gain curve in the regime where preconditioning is interesting: the leverage ratio at $d = 4$ is $\sim 32$, and even at $d = 8$ remains $\sim 10^4$. Second, the leverage \emph{decreases} super-exponentially, so each additional degree purchases progressively less spectral benefit per unit of noise penalty---consistent with a heuristic optimal degree (Remark~\ref{rem:noise-tradeoff} below) that is finite and small even in the absence of any constraint on $d$.
-
-\begin{remark}[Heuristic optimal degree]
-\label{rem:noise-tradeoff}
-The Marsden--Hazan regret bound for online prediction in marginally stable LDSs~\citep[Thm.~3]{marsden2024universal} contains, in the simplest reading, a sum of two competing terms in $d$:
-\[
-    \mathrm{regret} \;\lesssim\; T \cdot \rho(p^*(A))^2 \;+\; T \cdot \norm{\boldsymbol{a}^{(d)}}_2^2 \cdot \sigma^2 \;+\; (\text{algorithm-dependent term}).
-\]
-Substituting Corollary~\ref{cor:spectral-compression} and modelling the noise gain as $C \alpha^d$, the optimum over $d$ obeys
-\[
-    d^* \;\approx\; \frac{1}{\log(4 \alpha)} \log\!\Bigl(\frac{A}{B C}\Bigr),
-\]
-where $A$ aggregates the LDS contraction constants and $B$ the noise constants. Crucially, $d^*$ depends only on the ratio $A / (BC)$ and is \emph{independent of $T$}: no asymptotically growing degree is needed. The cited Marsden--Hazan analysis gives explicit dimension-independent regret rates as $T \to \infty$ under marginal-stability and comparator-class assumptions; the structural prediction we use from it is the qualitative shape of the tradeoff captured in Figure~\ref{fig:spectral-noise-tradeoff}, not a specific regret rate.
-\end{remark}
-
-For our application: at $d = 4$, the leverage ratio is $\approx 31.7$, and we treat this as a sufficient (rather than optimal) operating point. Whether other classical bases---Legendre, EMA, finite differences---offer competitive tradeoffs in this region, and whether learning the coefficients does better or worse than the analytic Chebyshev solution, are empirical questions that we examine in Section~\ref{sec:empirical} (Table~\ref{tab:ablations-main}(c) and Section~\ref{sec:learned-fir}).
+\noindent For comparison, vanilla regression without preconditioning achieves regret $O(C_{\mathrm{domain}} \sqrt{d_{\mathrm{out}}}\, T^{5/2})$, which is \emph{not} sublinear in $T$. USP with spectral filtering (Algorithm~3 of \citet{marsden2024universal}) improves the rate further to $\tilde O(T^{-3/13})$ by learning the $\aleph_2$ term as well, at the cost of a more complex spectral basis. Both rates are \emph{independent of the hidden dimension} $d_h$---the signature contribution of USP.
 
 %==============================================================================
 \section{Patch-based Transformers for Forecasting}
 \label{sec:patch-transformers}
 %==============================================================================
 
-Our experiments are conducted on the \emph{Moirai-2 Small} time series foundation model~\citep{liu2024moirai2}, the open-source\footnote{Available on the HuggingFace Hub as \texttt{Salesforce/moirai-2.0-R-small}; the architecture and training recipe follow the description in \citet{liu2024moirai2}.} dense, decoder-only successor to the original Moirai encoder~\citep{woo2024unified}. We chose Moirai-2 because it is a small ($11.4$M parameter), publicly reproducible, state-of-the-art universal forecaster: small enough to train from scratch on a single H100 within wall-clock budgets compatible with five-seed ablations, yet competitive with much larger models on the GIFT-Eval benchmark. Our preconditioning method modifies only the input projection of this model; understanding the surrounding architecture, training objective, training corpus, and evaluation protocol is therefore essential context for the empirical results in Section~\ref{sec:empirical}. We summarise each in turn.
+\emph{Time series foundation models} are large pretrained models that produce zero-shot forecasts for arbitrary unseen series without task-specific fine-tuning. Like language foundation models, they are trained on a large and diverse corpus---in this case, millions of time series spanning energy, transport, climate, retail, and other domains---and transfer the learned temporal patterns to new series at inference time. The dominant architecture is the \emph{patch-based transformer}: the input series is segmented into fixed-length patches, each patch is projected into an embedding vector, and a stack of transformer layers models inter-patch dependencies via self-attention. The output head decodes these representations into a predictive distribution over future time steps. Several recent models follow this paradigm, including PatchTST~\citep{nie2023patchtst}, Moirai~\citep{woo2024unified}, TimesFM~\citep{das2024timesfm}, and Chronos~\citep{ansari2024chronos}, differing primarily in training objective, patch encoding, and output parameterisation.
+
+Our experiments are conducted on \emph{Moirai-2 Small}~\citep{liu2024moirai2}, the open-source\footnote{Available on the HuggingFace Hub as \texttt{Salesforce/moirai-2.0-R-small}; the architecture and training recipe follow the description in \citet{liu2024moirai2}.} dense, decoder-only successor to the original Moirai encoder~\citep{woo2024unified}. We chose Moirai-2 because it is a small ($11.4$M parameter), publicly reproducible, state-of-the-art universal forecaster: small enough to train from scratch on a single H100 within wall-clock budgets compatible with five-seed ablations, yet competitive with much larger models on the GIFT-Eval benchmark. Our preconditioning method modifies only the input projection of this model; understanding the surrounding architecture, training objective, training corpus, and evaluation protocol is therefore essential context for the empirical results in Section~\ref{sec:empirical}. We summarise each in turn.
 
 \subsection{Patches and the Per-Patch Projection}
 \label{sec:patches}
@@ -514,6 +501,30 @@ During training, each patch's preconditioning channel is independently zeroed wi
 \paragraph{Parameter count.}
 For Moirai-2 Small ($P = 16$, $d_{\text{model}} = 384$), widening the first linear layer from $32 \to 384$ (target + mask) to $48 \to 384$ (target + mask + preconditioning) adds $16 \cdot 384 = 6{,}144$ parameters; the residual path contributes another $\approx 6{,}000$. The total overhead is $\approx 12$K parameters, or $0.105\%$ of the $11.4$M baseline. No other parameters are added.
 
+\begin{algorithm}[t]
+\caption{Polynomial Input Preconditioning for Patch-based Forecasting}
+\label{alg:poly-hint}
+\begin{algorithmic}[1]
+\REQUIRE Input series $x_{1:T}$; monic Chebyshev coefficients $c_{1:d}$ (fixed, from $\tilde T_d$); stride $s = P$; dropout rate $p_{\mathrm{drop}}$.
+\ENSURE Patch embeddings $\mathbf{e}_1, \ldots, \mathbf{e}_{T/P}$.
+\FOR[Compute residual channel]{$t = 1$ \TO $T$}
+    \STATE $r_t \leftarrow \sum_{k=1}^{d} c_k \cdot x_{t - ks}$
+\ENDFOR
+\FOR[Patch and embed]{$i = 1$ \TO $T/P$}
+    \STATE $\mathbf{p}_i \leftarrow (x_{(i-1)P+1}, \ldots, x_{iP})$
+    \STATE $\mathbf{m}_i \leftarrow$ observation mask for patch $i$
+    \STATE $\mathbf{r}_i \leftarrow (r_{(i-1)P+1}, \ldots, r_{iP})$
+    \IF{training \AND $\mathrm{Bernoulli}(p_{\mathrm{drop}})$}
+        \STATE $\mathbf{r}_i \leftarrow \mathbf{0}$ \COMMENT{Channel dropout}
+    \ENDIF
+    \STATE $\mathbf{e}_i \leftarrow \mathrm{ResBlock}_{3P \to d_{\mathrm{model}}}([\mathbf{p}_i;\, \mathbf{m}_i;\, \mathbf{r}_i])$
+\ENDFOR
+\STATE Feed $\mathbf{e}_{1:T/P}$ to the (unmodified) transformer stack.
+\end{algorithmic}
+\end{algorithm}
+
+Algorithm~\ref{alg:poly-hint} summarises the complete procedure. The Chebyshev coefficients are fixed at initialisation and never updated; the only trainable parameters are the widened input projection weights.
+
 %==============================================================================
 \section{Empirical Results}
 \label{sec:empirical}
@@ -581,7 +592,7 @@ MASE & $0.838$ & $0.839$ & $\mathbf{0.823}$ & $0.842$ & & & \\
 
 The ablations in Table~\ref{tab:ablations-main} align with the theoretical predictions of Section~\ref{sec:precondition} and pin down what is and is not load-bearing about \HD{}'s configuration.
 
-\emph{(a) Filter degree.} Across $d \in \{2, \ldots, 8\}$ at five seeds each, $d = 4$ achieves the lowest mean MASE, but the curve is shallow: $d \in \{3, 5, 6, 8\}$ are within roughly one seed-to-seed standard deviation of $d = 4$, and only $d = 2$ (a single non-trivial lag) and $d = 7$ trail meaningfully. The seed-robust qualitative statement is ``every $d \geq 2$ improves over \Baseline{}''---which is what the spectral-compression argument predicts (Theorem~\ref{thm:chebyshev-minimax}, Corollary~\ref{cor:spectral-compression}). The flatness of the degree curve also matches the noise-gain analysis of Section~\ref{sec:noise-gain}: the spectral term saturates by $d \approx 3$ on capacity-limited patch transformers, after which additional taps offer no further benefit and only contribute increasing noise gain. We therefore treat $d=4$ as a working choice, not a uniquely optimal one.
+\emph{(a) Filter degree.} Across $d \in \{2, \ldots, 8\}$ at five seeds each, $d = 4$ achieves the lowest mean MASE, but the curve is shallow: $d \in \{3, 5, 6, 8\}$ are within roughly one seed-to-seed standard deviation of $d = 4$, and only $d = 2$ (a single non-trivial lag) and $d = 7$ trail meaningfully. The seed-robust qualitative statement is ``every $d \geq 2$ improves over \Baseline{}''---which is what the spectral-compression argument predicts (Theorem~\ref{thm:chebyshev-minimax}, Corollary~\ref{cor:spectral-compression}). The flatness of the degree curve is consistent with the regret-bound tradeoff of Theorem~\ref{thm:usp-general}: the spectral-compression term saturates by $d \approx 3$ on capacity-limited patch transformers, after which additional taps offer diminishing benefit relative to growing coefficient-norm cost. We therefore treat $d=4$ as a working choice, not a uniquely optimal one.
 
 \emph{(b) Stride.} Stride $s = P = 16$ is optimal, beating $s = 4, 8, 32$. This is the empirical signature of the cross-patch interpretation: filter taps at lags $32$ and $64$ align exactly with patch boundaries (two and four patches back), so the preconditioning channel injects cross-patch structure at the natural unit of the architecture. Strides smaller than $P$ contaminate the residual with within-patch information that the per-patch projection already sees; strides much larger than $P$ over-shoot the receptive scales the model can use.
 
@@ -717,7 +728,7 @@ FIR filter design with Chebyshev polynomials is a classical topic~\citep{parks19
 %==============================================================================
 
 \paragraph{When does preconditioning help?}
-The spectral story predicts that datasets whose power spectrum aligns with the filter's attenuation minima benefit least, and those whose mass aligns with passbands benefit most. The cross-domain pattern (Appendix~\ref{app:domain}) is consistent with this prediction in a coarse sense: transport and energy domains ($-4$ to $-7\%$ MASE) have strong autocorrelation at the $32$- and $64$-sample lookback scales of the filter at $15$-minute resolution (corresponding to $8/16$-hour intra-day structure); weather and healthcare, dominated by much-longer or stochastic correlations, show essentially no improvement. We do not claim that this matches the precise filter-frequency calculation in Theorem~\ref{thm:freq-response}; the $32$- and $64$-step filter lags and the $\omega = 0, 1/32, 1/16, \ldots$ attenuation frequencies are distinct mathematical objects, and the cross-domain evidence cannot distinguish their respective contributions.
+The spectral story predicts that datasets whose temporal structure aligns with the filter's lookback scales benefit most. The cross-domain pattern (Appendix~\ref{app:domain}) is consistent with this prediction in a coarse sense: transport and energy domains ($-4$ to $-7\%$ MASE) have strong autocorrelation at the $32$- and $64$-sample lookback scales of the filter at $15$-minute resolution (corresponding to $8/16$-hour intra-day structure); weather and healthcare, dominated by much-longer or stochastic correlations, show essentially no improvement.
 
 \paragraph{Model scale.}
 We find that the benefit of input preconditioning is most pronounced at the small ($11.4$M) Moirai-2 scale; at the base ($46$M) scale, the improvement is seed-dependent and not consistently significant. This is consistent with a capacity-efficiency interpretation: when a model has enough parameters to discover the relevant cross-patch correlations via attention, the inductive bias of a fixed Chebyshev preconditioner adds less value.

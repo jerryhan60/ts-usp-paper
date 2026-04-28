@@ -87,7 +87,7 @@ This paper represents my own work in accordance with University regulations.\\[0
 %==============================================================================
 
 \paragraph{Universal sequence preconditioning.}
-\citet{marsden2024universal} recently proved provable guarantees for online prediction algorithms on data arising from marginally stable, possibly asymmetric, linear dynamical systems (LDS). Their key observation: for an LDS with hidden-state recurrence $h_{t+1} = A h_t + w_t$ and observation $y_t = C h_t + e_t$, convolving the target sequence with the coefficients of a degree-$d$ monic polynomial $p(z)$ is algebraically equivalent to multiplying the hidden dynamics by $p(A)$. Choosing $p$ to be the monic Chebyshev polynomial of the first kind, $\tilde T_d$, exploits its classical equioscillation property: among all monic degree-$d$ polynomials, $\tilde T_d$ uniquely attains the minimal $\ell_\infty$ norm $2^{1-d}$ on $[-1,1]$~\citep{davis1975interpolation}. Hence whenever $A$'s real spectrum lies in $[-\rho(A),\rho(A)]$,
+\citet{marsden2024universal} recently proved provable guarantees for online prediction algorithms on data arising from marginally stable, possibly asymmetric, linear dynamical systems (LDS). Their key observation: for an LDS with hidden-state recurrence $x_{t+1} = A x_t + w_t$ and observation $y_t = C x_t + v_t$, convolving the target sequence with the coefficients of a degree-$d$ monic polynomial $p(z)$ is algebraically equivalent to multiplying the hidden dynamics by $p(A)$. Choosing $p$ to be the monic Chebyshev polynomial of the first kind, $\tilde T_d$, exploits its classical equioscillation property: among all monic degree-$d$ polynomials, $\tilde T_d$ uniquely attains the minimal $\ell_\infty$ norm $2^{1-d}$ on $[-1,1]$~\citep{davis1975interpolation}. Hence whenever $A$'s real spectrum lies in $[-\rho(A),\rho(A)]$,
 \[
     \rho\bigl(\tilde T_d(A/\rho(A))\bigr) \;\leq\; 2^{1-d},
 \]
@@ -97,7 +97,7 @@ so the preconditioned dynamics has spectral radius shrunk by a factor of $2^{1-d
 The setting of pretrained foundation models for time series~\citep{woo2024unified, liu2024moirai2, das2024decoder, ansari2024chronos, goswami2024moment, auer2025tirex} differs from the theoretical framework of USP in three important ways:
 \begin{enumerate}[leftmargin=1.5em, itemsep=0.1em, topsep=0.2em]
     \item \emph{The forecaster is a patch-based transformer rather than an online learner.} Models such as Moirai-2~\citep{liu2024moirai2} segment the input into fixed-length patches and embed each patch independently before any attention. The cumulative regret of an online learner is replaced by a batch-style empirical loss, and the model has access to the entire context window simultaneously rather than one observation at a time.
-    \item \emph{The data-generating process is far richer than a finite-dimensional LDS.} Pretraining corpora such as LOTSA~\citep{woo2024unified} aggregate billions of observations across heterogeneous domains, frequencies, and noise structures; many of the resulting signals are not well-modelled as outputs of a single low-dimensional LDS, so the algebraic equivalence ``$p(B) y_t \leftrightarrow p(A) h_t$'' applies, at best, only locally and approximately.
+    \item \emph{The data-generating process is far richer than a finite-dimensional LDS.} Pretraining corpora such as LOTSA~\citep{woo2024unified} aggregate billions of observations across heterogeneous domains, frequencies, and noise structures; many of the resulting signals are not well-modelled as outputs of a single low-dimensional LDS, so the algebraic equivalence ``$p(B) y_t \leftrightarrow p(A) x_t$'' applies, at best, only locally and approximately.
     \item \emph{The task is multi-step-ahead forecasting, not single-step online prediction.} A naive approach to USP for forecasting would precondition the target, train the predictor to emit the preconditioned next-step value $\hat{\tilde y}_{t+1}$, and invert the convolution at inference to recover $\hat y_{t+1}$. However, the inversion is a causal recurrence
     \begin{equation}
         \hat y_t \;=\; \hat{\tilde y}_t \;-\; \sum_{k=1}^{d} c_k\, \hat y_{t-k},
@@ -107,14 +107,14 @@ The setting of pretrained foundation models for time series~\citep{woo2024unifie
 \end{enumerate}
 
 \paragraph{Our approach: a residual preconditioning channel.}
-To resolve the multi-step inversion problem, we leave the forecast target unchanged and use the polynomial-preconditioned signal as an \emph{auxiliary input channel}. Concretely, given a univariate input sequence $x[t]$, we apply a degree-$d$ monic polynomial $p$ in the lag operator $B_s$ at stride $s$ and form the residual
+To resolve the multi-step inversion problem, we leave the forecast target unchanged and use the polynomial-preconditioned signal as an \emph{auxiliary input channel}. Concretely, given a univariate input sequence $x_t$, we apply a degree-$d$ monic polynomial $p$ in the lag operator $B_s$ at stride $s$ and form the residual
 \begin{equation}
-    \tilde h[t] \;=\; (p(B_s) x)[t] - x[t] \;=\; \sum_{k=1}^{d} c_k \, x[t - k s],
+    r_t \;=\; (p(B_s) x)_t - x_t \;=\; \sum_{k=1}^{d} c_k \, x_{t-k s},
     \label{eq:precond-intro}
 \end{equation}
 where $\{c_k\}_{k=1}^{d}$ are the non-leading coefficients of the chosen monic polynomial and the stride $s$ is set equal to the patch size $P$. We use the residual rather than the full filter output so that the preconditioning channel captures the \emph{novel} information injected by preconditioning (subtracting the raw signal, which is already available as the existing target channel). For our default choice---the monic Chebyshev polynomial $\tilde T_d$ with $d=4$, $s = P = 16$---the residual reduces to
 \[
-    \tilde h[t] \;=\; -x[t - 2P] + \tfrac{1}{8} x[t - 4P],
+    r_t \;=\; -x_{t-2P} + \tfrac{1}{8} x_{t-4P},
 \]
 i.e., a sparse FIR filter that injects information from two and four patches in the past. Because the model never operates in preconditioned space at inference, no inversion is needed and the multi-step error accumulation of Eq.~\eqref{eq:inversion} is avoided.
 
@@ -139,34 +139,136 @@ The remainder of this paper develops the following contributions:
 \label{sec:preliminaries}
 %==============================================================================
 
-We review two strands of background that our development relies on: linear dynamical systems and their forecasting, and Chebyshev approximation theory. The patch-based transformer architecture and the specific Moirai-2 instantiation we use are deferred to Section~\ref{sec:patch-transformers}. A reader familiar with any of these may skim the corresponding subsection.
+The mathematical background for our method has two roles. First, it explains why long-memory sequence prediction is easy for strictly stable systems but hard near the unit circle. Second, it identifies the specific object we borrow from the theory: a fixed polynomial filter that reshapes the spectrum of a sequence before it is passed to a predictor. We follow the linear-dynamical-system notation of \citet[Chs.~4 and~9]{hazan2025onlinecontrol}: $x_t$ for hidden state, $u_t$ for control, $y_t$ for observation, and $w_t, v_t$ for process and observation noise. The patch-based transformer architecture and the specific Moirai-2 instantiation we use are deferred to Section~\ref{sec:patch-transformers}. We present only the statements needed for the paper; exact constants and full proofs are deferred to the cited sources, and a reader familiar with any of these may skim the corresponding subsection.
 
-\subsection{Linear Dynamical Systems and Sequence Forecasting}
+\subsection{Passive Prediction in Linear Dynamical Systems}
+\label{sec:passive-lds}
 
-A \emph{linear dynamical system} (LDS) with hidden dimension $m$ and observation dimension $n$ is specified by matrices $A \in \R^{m \times m}$, $C \in \R^{n \times m}$, and sequences of process noise $w_t \in \R^m$ and observation noise $e_t \in \R^n$. The system evolves according to
+A partially observed linear time-invariant system has hidden state $x_t \in \R^{d_x}$, observed input $u_t \in \R^{d_u}$, and output $y_t \in \R^{d_y}$:
 \begin{equation}
-    h_{t+1} = A h_t + w_t, \qquad y_t = C h_t + e_t, \qquad t \in \Z_{\geq 0},
+    x_{t+1} = A x_t + B u_t + w_t,
+    \qquad y_t = C x_t + v_t,
+    \qquad t \in \Z_{\geq 0},
     \label{eq:lds}
 \end{equation}
-with initial state $h_0 \in \R^m$. In the \emph{online prediction} problem, a learner sees $y_1, y_2, \ldots$ sequentially and at each step $t$ outputs a prediction $\hat y_{t+1}$ of the next observation; performance is measured by the cumulative regret
-\[
-    \mathrm{Regret}_T = \sum_{t=1}^T \ell(\hat y_{t+1}, y_{t+1}) - \min_{\text{class}} \sum_{t=1}^T \ell(\tilde y_{t+1}, y_{t+1}),
-\]
-where $\ell$ is a convex loss (typically squared error) and the minimum ranges over a comparator class such as linear functions of $y_{1:t}$.
+with initial state $x_0 \in \R^{d_x}$. Here $A, B, C$ are unknown system matrices, while $w_t$ and $v_t$ denote process and observation noise. In time-series forecasting there may be no exogenous input; this is recovered by setting $u_t \equiv 0$ or by treating past observations as the relevant input history.
 
-The \emph{spectral radius} $\rho(A) = \max_i |\lambda_i(A)|$ of the transition matrix controls the forecastability of the system. When $\rho(A) < 1$ (strictly stable), the memory of the system decays geometrically and classical regret bounds of order $O(\sqrt{T} \, \mathrm{poly}(m))$ are available~\citep{hazan2017learning}. When $\rho(A) = 1$ (marginally stable, e.g., pure sinusoids or integrated processes), standard bounds degrade, with the dependence on $m$ often becoming linear or worse.
+The prediction problem is \emph{passive}: unlike control, the learner does not choose $u_t$ to influence the state. At each time $t$, the learner observes the past history and predicts $\hat y_t$; after observing $y_t$, it suffers loss $\ell_t(\hat y_t, y_t)$, usually squared error. For a predictor class $\Pi$, regret is
+\begin{equation}
+    \mathrm{Regret}_T(\mathcal{A}, \Pi) \;:=\; \sum_{t=1}^{T} \ell_t(\hat y_t, y_t) - \min_{\pi \in \Pi} \sum_{t=1}^{T} \ell_t(\hat y_t^{\pi}, y_t).
+    \label{eq:prediction-regret}
+\end{equation}
+Sublinear regret means that the learner's average loss approaches that of the best predictor in the reference class. This is the sense in which the online-learning results below should be read.
+
+\subsection{Stability and Finite Memory}
+\label{sec:stability-memory}
+
+The \emph{spectral radius} of a square matrix is $\rho(A) := \max\{\abs{\lambda} : \lambda \in \mathrm{spec}(A)\}$. For a time-invariant linear system, $\rho(A) < 1$ is equivalent to $A^t \to 0$ as $t \to \infty$. For finite-time learning bounds one usually needs the quantitative version
+\begin{equation}
+    \norm{A^t} \;\leq\; M \rho^t \qquad \text{for all } t \geq 0, \qquad \rho \in (0, 1),
+    \label{eq:quantitative-stability}
+\end{equation}
+which says that the influence of the remote past decays geometrically. The following truncation lemma is the precise version of the common statement that strictly stable systems have finite effective memory.
+
+\begin{lemma}[Stable LDSs are approximated by finite-memory predictors; cf.\ {\citealp[Lemma~9.6]{hazan2025onlinecontrol}}]
+\label{lem:stable-truncation}
+Consider the noiseless input-output LDS $x_{t+1} = A x_t + B u_t$, $y_t = C x_t$. Suppose $\norm{A^t} \leq M \rho^t$, $\norm{B} \leq \beta$, $\norm{C} \leq \gamma$, $\norm{u_t} \leq U$ with $\rho \in (0, 1)$. Let $\pi_{A,B,C,x_0}$ denote the exact open-loop LDS predictor and let $\pi_{A,B,C,h}$ be the length-$h$ truncated predictor $\hat y_t^{(h)} = \sum_{i=1}^{h} CA^{i-1}B u_{t-i}$. Then
+\begin{equation}
+    \sum_{t=1}^{T} \norm{\hat y_t^{\pi_{A,B,C,x_0}} - \hat y_t^{(h)}} \;\leq\; T \cdot \frac{M \beta \gamma U}{1 - \rho} \rho^h + \sum_{t=1}^{\min\{T, d_x\}} \norm{C A^t x_0}.
+    \label{eq:stable-truncation}
+\end{equation}
+\end{lemma}
+
+Thus, after the initial transient, a stable system can be approximated to error $\varepsilon$ using memory $h = O(\log(T/\varepsilon)/(1 - \rho))$ when $\rho$ is close to one. This is the useful ``strictly stable'' baseline: finite-memory linear prediction is valid, but the required memory can grow poorly as the stability margin $1 - \rho$ shrinks.
+
+When $\rho(A) = 1$ (marginally stable, e.g., pure sinusoids or integrated processes), this geometric truncation no longer gives a finite-memory approximation with rapidly vanishing tail; classical regret bounds degrade, with the dependence on $d_x$ often becoming linear or worse. The methods we develop are designed for exactly this difficult regime.
+
+\subsection{Linear Predictors and Online Convex Optimization}
+\label{sec:linear-predictors}
+
+The standard convex comparator class for passive prediction is the class of finite-memory linear predictors:
+\begin{definition}[Finite-memory linear predictors]
+\label{def:linear-predictors}
+For memory lengths $h, k$ and norm radius $\kappa$, define $\Pi^L_{h, k, \kappa}$ to be the set of predictors
+\begin{equation}
+    \hat y_t \;=\; \sum_{i=1}^{h} M_{1, i} \, y_{t-i} + \sum_{j=1}^{k} M_{2, j} \, u_{t-j},
+    \qquad
+    \sum_{i=1}^{h} \norm{M_{1, i}} + \sum_{j=1}^{k} \norm{M_{2, j}} \leq \kappa.
+    \label{eq:linear-predictor}
+\end{equation}
+\end{definition}
+
+This class is computationally attractive because it is convex in the predictor matrices. Online Gradient Descent (OGD) therefore gives an immediate learning guarantee.
+
+\begin{theorem}[OGD for finite-memory predictors; cf.\ {\citealp[Thm.~6.1 and Cor.~9.7]{hazan2025onlinecontrol}}]
+\label{thm:ogd-linear-predictors}
+Let $K$ be a convex parameter set of diameter $D$, and suppose the loss gradients over $K$ have norm at most $G$. OGD with step sizes $\eta_t = D / (G \sqrt{t})$ satisfies
+\begin{equation}
+    \sum_{t=1}^{T} \ell_t(M_t) - \min_{M \in K} \sum_{t=1}^{T} \ell_t(M) \;\leq\; \frac{3}{2} G D \sqrt{T}.
+    \label{eq:ogd-regret}
+\end{equation}
+In particular, finite-memory linear predictors are learnable with $O(\sqrt{T})$ regret, with constants depending on the memory length, norm radius, and data bounds.
+\end{theorem}
+
+There is also an exact structural reason to study linear predictors. In the noiseless case, every finite-dimensional LDS induces a finite-memory autoregressive predictor.
+
+\begin{theorem}[Cayley--Hamilton representation; cf.\ {\citealp[Thm.~9.4]{hazan2025onlinecontrol}}]
+\label{thm:cayley-hamilton}
+Consider the noiseless LDS $x_{t+1} = A x_t + B u_t$, $y_t = C x_t$, where $A \in \R^{d_x \times d_x}$ has characteristic polynomial $p_A(\lambda) = \lambda^{d_x} + a_1 \lambda^{d_x - 1} + \cdots + a_{d_x}$. Then there exist matrices $M_{1, i} \in \R^{d_y \times d_y}$ and $M_{2, j} \in \R^{d_y \times d_u}$, $i, j = 1, \ldots, d_x$, such that for every $t > d_x$,
+\begin{equation}
+    y_t \;=\; \sum_{i=1}^{d_x} M_{1, i} \, y_{t-i} + \sum_{j=1}^{d_x} M_{2, j} \, u_{t-j}.
+    \label{eq:cayley-hamilton-predictor}
+\end{equation}
+Concretely, one may take $M_{1, i} = -a_i I_{d_y}$ and $M_{2, j} = C\bigl(\sum_{i=0}^{j-1} a_i A^{j-1-i}\bigr) B$ (with $a_0 = 1$).
+\end{theorem}
+
+Theorem~\ref{thm:cayley-hamilton} says that linear predictors are not merely a heuristic: in the noiseless setting they exactly represent finite-dimensional LDS predictions after a transient, with autoregressive coefficients given precisely by the coefficients of $A$'s characteristic polynomial. This identity is the algebraic foundation behind why convolving the observed sequence with a polynomial---preconditioning---is meaningful: it operates on the same finite-memory representation that is, by Cayley--Hamilton, exact. The drawback is that the memory length depends on the hidden dimension $d_x$. Lemma~\ref{lem:stable-truncation} removes this dependence for strictly stable systems, but replaces it with dependence on the stability margin $1 - \rho$. \emph{Spectral filtering} addresses precisely this bottleneck.
+
+\subsection{Spectral Filtering: Compressing Long Memory}
+\label{sec:spectral-filtering-prelim}
+
+Spectral filtering was introduced by \citet{hazan2017learning} to learn LDSs without explicit system identification and without a long finite-memory window; it is the immediate mathematical predecessor of universal sequence preconditioning. The exposition in \citet[Ch.~11]{hazan2025onlinecontrol} begins with the scalar impulse-response vectors
+\begin{equation}
+    \mu_\alpha \;=\; \begin{bmatrix} 1 & \alpha & \alpha^2 & \cdots & \alpha^{T-1} \end{bmatrix}^\top, \qquad \alpha \in [0, 1],
+    \label{eq:impulse-vector}
+\end{equation}
+and the Hankel/Hilbert matrix
+\begin{equation}
+    Z_T \;:=\; \int_0^1 \mu_\alpha \mu_\alpha^\top \, d\alpha \in \R^{T \times T},
+    \qquad (Z_T)_{ij} = \frac{1}{i + j + 1} \quad (i, j = 0, \ldots, T - 1).
+    \label{eq:hankel-matrix}
+\end{equation}
+Let $\phi_1, \ldots, \phi_T$ be the eigenvectors of $Z_T$, ordered by decreasing eigenvalue. The eigenvalues of $Z_T$ decay rapidly:
+\begin{equation}
+    \sigma_k(Z_T) \;\leq\; 4 \pi^2 \exp\!\left(-\frac{k}{\log T}\right) \qquad (k, T > 1),
+    \label{eq:hankel-decay}
+\end{equation}
+as stated in \citet[Thm.~11.1]{hazan2025onlinecontrol}. This decay implies that the first polylogarithmically many eigenvectors approximate the family of impulse responses $\{\mu_\alpha : \alpha \in [0, 1]\}$ well.
+
+The resulting spectral predictor uses the features $\langle \tilde u_t, \phi_i \rangle$, where $\tilde u_t = (u_{t-1}, u_{t-2}, \ldots, u_1, 0, \ldots, 0)$. In the scalar case,
+\begin{equation}
+    \hat y_t \;=\; \sum_{i=1}^{h} M_i \, \langle \tilde u_t, \phi_i \rangle.
+    \label{eq:spectral-predictor}
+\end{equation}
+For symmetric LDSs with real spectrum, diagonalising $A$ reduces the high-dimensional impulse response to a sum of scalar responses of the form~\eqref{eq:impulse-vector}, and the parameter count $h = O(\log^2 T / \varepsilon)$ suffices to $\varepsilon$-approximate the entire optimal-predictor class \emph{independent of} $d_x$ and $1 - \rho$. The online learner then runs a convex online algorithm over the coefficients $M_i$.
+
+\begin{remark}[What spectral filtering contributes]
+Spectral filtering replaces a long raw-history basis by a compressed basis tailored to LDS impulse responses. It is the immediate mathematical predecessor of the present work. Our method does not learn Hankel eigenfeatures; instead, it injects one fixed polynomially filtered channel into a transformer. The shared idea is that a carefully chosen linear transformation of the input sequence can expose long-range dynamical structure to a downstream learner.
+\end{remark}
+
+The preceding stable-system picture becomes significantly less favourable when eigenvalues approach the unit circle, and even more so when $A$ is asymmetric. \citet[Thm.~12.1]{hazan2025onlinecontrol} gives a cyclic-permutation LDS construction in which any online learner incurs expected cumulative squared loss $\Omega(d_x)$ over $T \geq d_x$ rounds before the hidden state is revealed. The asymmetric extension of spectral filtering is more delicate; the universal-sequence-preconditioning technique we describe in Section~\ref{sec:precondition} is one approach to this regime, and is the immediate mathematical foundation of our method.
 
 \subsection{Chebyshev Polynomials}
 \label{sec:chebyshev-prelim}
 
-The \emph{Chebyshev polynomials of the first kind}, denoted $T_d(x)$ for $d \in \Z_{\geq 0}$, are defined by the recurrence
+The \emph{Chebyshev polynomials of the first kind}, denoted $T_d(z)$ for $d \in \Z_{\geq 0}$, are defined by the recurrence
 \begin{equation}
-    T_0(x) = 1, \quad T_1(x) = x, \quad T_{d+1}(x) = 2 x \, T_d(x) - T_{d-1}(x),
+    T_0(z) = 1, \quad T_1(z) = z, \quad T_{d+1}(z) = 2 z \, T_d(z) - T_{d-1}(z),
     \label{eq:cheb-recurrence}
 \end{equation}
-or equivalently by the trigonometric identity $T_d(\cos \theta) = \cos(d \theta)$. The first several polynomials are $T_2(x) = 2x^2 - 1$, $T_3(x) = 4x^3 - 3x$, $T_4(x) = 8x^4 - 8x^2 + 1$. The leading coefficient of $T_d$ is $2^{d-1}$, so the \emph{monic Chebyshev polynomial} is $\tilde T_d(x) = T_d(x) / 2^{d-1}$. For $d = 4$,
+or equivalently by the trigonometric identity $T_d(\cos \theta) = \cos(d \theta)$. The first several polynomials are $T_2(z) = 2z^2 - 1$, $T_3(z) = 4z^3 - 3z$, $T_4(z) = 8z^4 - 8z^2 + 1$. The leading coefficient of $T_d$ is $2^{d-1}$, so the \emph{monic Chebyshev polynomial} is $\tilde T_d(z) = T_d(z) / 2^{d-1}$. For $d = 4$,
 \[
-    \tilde T_4(x) = x^4 - x^2 + \tfrac{1}{8}.
+    \tilde T_4(z) = z^4 - z^2 + \tfrac{1}{8}.
 \]
 
 Chebyshev polynomials possess several extremal properties; one of the most celebrated is the \emph{equioscillation property} underlying the approximation theorem we state in Section~\ref{sec:chebyshev}.
@@ -180,13 +282,13 @@ We now review the framework of \citet{marsden2024universal}, which motivates our
 
 \subsection{Polynomial Preconditioning of LDS Observations}
 
-Consider an LDS as in~\eqref{eq:lds} with noise terms neglected for exposition. Then $y_t = C A^t h_0$ and the $d$-step differenced or preconditioned observation
+Consider an LDS as in~\eqref{eq:lds} with noise terms neglected for exposition. Then $y_t = C A^t x_0$ and the $d$-step differenced or preconditioned observation
 \[
-    \tilde y_t \;=\; (p(B) y)[t] \;=\; \sum_{k=0}^d a_k y_{t-k} \;=\; C \Big( \sum_{k=0}^d a_k A^{-k} \Big) A^t h_0 \;=\; C \, p(A^{-1}) A^t h_0,
+    \tilde y_t \;=\; (p(B) y)_t \;=\; \sum_{k=0}^d a_k y_{t-k} \;=\; C \Big( \sum_{k=0}^d a_k A^{-k} \Big) A^t x_0 \;=\; C \, p(A^{-1}) A^t x_0,
 \]
 where $B$ denotes the backshift operator and $p(z) = \sum_{k=0}^d a_k z^k$. Reversing the polynomial (equivalently, working with the reciprocal polynomial $p^*(z) = z^d p(1/z)$) gives the cleaner identity
 \[
-    \tilde y_t \;=\; C \, p^*(A) A^{t-d} h_0,
+    \tilde y_t \;=\; C \, p^*(A) A^{t-d} x_0,
 \]
 so that preconditioning in observation space corresponds to \emph{multiplying the hidden state's dynamics by $p^*(A)$}. If the eigenvalues of $A$ lie in an interval $[-\rho, \rho] \subset \R$ (real spectrum), then for any monic degree-$d$ polynomial $q$,
 \[
@@ -199,31 +301,31 @@ and the right-hand side is \emph{minimized over monic $q$ of degree $d$} by $q =
 
 The qualitative argument that ``smaller $\rho(p^*(A))$ means easier prediction'' is made precise by~\citet{marsden2024universal}. Their results require a careful treatment of the spectral residual that we will not reproduce in full; instead we restate the underlying \emph{algebraic mechanism} (an exact identity that holds noise-free) and the \emph{informal heuristic} that emerges from it. The reader interested in the exact regret rates---which depend on the specific online learner, the marginal-stability assumption, and a careful summation of the spectral residual over time---is referred to~\citep[Theorems~3 and~5]{marsden2024universal}.
 
-Fix an LDS as in~\eqref{eq:lds} with hidden dimension $m$, transition matrix $A$ with $\rho(A) \leq 1$, and observation matrix $C \in \R^{1 \times m}$. Let $p$ be a monic polynomial of degree $d$ with coefficient vector $\boldsymbol{a} = (a_0, \ldots, a_d)$ (with $a_0 = 1$), and consider preconditioning the observation stream by $\tilde y_t := (p(B) y)[t] = \sum_{k=0}^{d} a_k\, y_{t-k}$.
+Fix an LDS as in~\eqref{eq:lds} with hidden dimension $m$, transition matrix $A$ with $\rho(A) \leq 1$, and observation matrix $C \in \R^{1 \times m}$. Let $p$ be a monic polynomial of degree $d$ with coefficient vector $\boldsymbol{a} = (a_0, \ldots, a_d)$ (with $a_0 = 1$), and consider preconditioning the observation stream by $\tilde y_t := (p(B) y)_t = \sum_{k=0}^{d} a_k\, y_{t-k}$.
 
 \begin{lemma}[Algebraic identity for preconditioned observations; cf.\ {\citet[Lemma~2]{marsden2024universal}}]
 \label{lem:mh-algebra}
-In the noise-free case ($w_t \equiv 0$, $e_t \equiv 0$), with $h_0$ the LDS initial state,
+In the noise-free case ($w_t \equiv 0$, $v_t \equiv 0$), with $x_0$ the LDS initial state,
 \begin{equation}
-    \tilde y_t \;=\; \sum_{k=0}^{d} a_k \, C A^{t-k} h_0 \;=\; C \cdot p^*(A) \cdot A^{t-d} \, h_0,
+    \tilde y_t \;=\; \sum_{k=0}^{d} a_k \, C A^{t-k} x_0 \;=\; C \cdot p^*(A) \cdot A^{t-d} \, x_0,
     \label{eq:mh-identity}
 \end{equation}
-where $p^*(z) := z^d p(1/z) = \sum_{k=0}^{d} a_k z^{d-k}$ is the reciprocal polynomial of $p$. With process and observation noise included, $\tilde y_t = C \cdot p^*(A) \cdot A^{t-d} h_0 + \tilde w_t + \tilde e_t$, where $\tilde e_t = (p(B) e)[t]$ is a moving-average of the observation noise with $\trace(\E[\tilde e_t \tilde e_t^\top]) = \norm{\boldsymbol{a}}_2^2 \cdot \trace(\Sigma_e)$, and $\tilde w_t$ is the analogous filtered process noise.
+where $p^*(z) := z^d p(1/z) = \sum_{k=0}^{d} a_k z^{d-k}$ is the reciprocal polynomial of $p$. With process and observation noise included, $\tilde y_t = C \cdot p^*(A) \cdot A^{t-d} x_0 + \tilde w_t + \tilde v_t$, where $\tilde v_t = (p(B) v)_t$ is a moving-average of the observation noise with $\trace(\E[\tilde v_t \tilde v_t^\top]) = \norm{\boldsymbol{a}}_2^2 \cdot \trace(\Sigma_v)$, and $\tilde w_t$ is the analogous filtered process noise.
 \end{lemma}
 
 \begin{proof}
-Direct calculation: $\tilde y_t = \sum_k a_k C A^{t-k} h_0 = C \big(\sum_k a_k A^{d-k}\big) A^{t-d} h_0$, and $\sum_k a_k A^{d-k}$ is exactly $p^*(A)$ by definition of $p^*$. The noise calculation is by linearity and isotropy of the noise covariance.\qedhere
+Direct calculation: $\tilde y_t = \sum_k a_k C A^{t-k} x_0 = C \big(\sum_k a_k A^{d-k}\big) A^{t-d} x_0$, and $\sum_k a_k A^{d-k}$ is exactly $p^*(A)$ by definition of $p^*$. The noise calculation is by linearity and isotropy of the noise covariance.\qedhere
 \end{proof}
 
 Lemma~\ref{lem:mh-algebra} is the load-bearing identity: $p$ is applied to the \emph{output} sequence \emph{once} (not iterated), and its effect is to replace the implicit dependence on $A^{t-d}$ by $p^*(A) \cdot A^{t-d}$. Because $A$ has spectrum in $[-\rho(A), \rho(A)]$, $p^*(A)$ has spectrum given by $\{p^*(\lambda) : \lambda \in \spec(A)\}$, and the contraction
 \begin{equation}
-    \norm{p^*(A) \cdot A^{t-d} \, h_0}_2 \;\leq\; \rho(p^*(A)) \cdot \rho(A)^{t-d} \cdot \norm{h_0}_2
+    \norm{p^*(A) \cdot A^{t-d} \, x_0}_2 \;\leq\; \rho(p^*(A)) \cdot \rho(A)^{t-d} \cdot \norm{x_0}_2
     \label{eq:mh-contraction}
 \end{equation}
 shrinks the relevant LDS magnitude by a factor of $\rho(p^*(A))$ uniformly in $t$. We summarise the heuristic implication.
 
 \begin{quote}\itshape
-\textbf{Heuristic regret reduction.} If a downstream online forecaster is run on the preconditioned sequence $\tilde y$, its cumulative squared-error regret splits qualitatively into three parts: (i) an \emph{algorithm} term (e.g., $O(L \log T)$ for online gradient descent on a $L$-dimensional comparator), (ii) a \emph{spectral residual} term that scales with $\rho(p^*(A))^2$ summed over time, and (iii) a \emph{noise-gain} term proportional to $\norm{\boldsymbol{a}}_2^2 \cdot \trace(\Sigma_e)$ that grows with the filter's $\ell^2$ coefficient norm.
+\textbf{Heuristic regret reduction.} If a downstream online forecaster is run on the preconditioned sequence $\tilde y$, its cumulative squared-error regret splits qualitatively into three parts: (i) an \emph{algorithm} term (e.g., $O(L \log T)$ for online gradient descent on a $L$-dimensional comparator), (ii) a \emph{spectral residual} term that scales with $\rho(p^*(A))^2$ summed over time, and (iii) a \emph{noise-gain} term proportional to $\norm{\boldsymbol{a}}_2^2 \cdot \trace(\Sigma_v)$ that grows with the filter's $\ell^2$ coefficient norm.
 \end{quote}
 
 \noindent The exact form of the spectral residual is delicate: when $\rho(A) < 1$, the geometric series $\sum_t \rho(A)^{2(t-d)}$ converges and the spectral term contributes $O(1)$; when $\rho(A) = 1$ (true marginal stability), the series diverges and~\citet{marsden2024universal} use a more careful argument to bound it by something sublinear in $T$. We do not reproduce that argument; for our purposes, the operative observation is that \emph{whatever bound holds for the spectral residual, it is monotone in $\rho(p^*(A))^2$, which is in turn minimized by the Chebyshev choice of $p$} (Theorem~\ref{thm:chebyshev-minimax} below). With $p(\lambda) = \rho^d \tilde T_d(\lambda/\rho)$ for $\rho = \rho(A)$, the contraction satisfies
@@ -261,15 +363,15 @@ $T_d(x)$ & classical Chebyshev polynomial of degree $d$, leading coefficient $2^
 $\tilde T_d(x) = T_d(x) / 2^{d-1}$ & monic Chebyshev polynomial; the minimax minimiser of Theorem~\ref{thm:chebyshev-minimax} \\
 $\tilde T_d^*(z) = z^d \tilde T_d(1/z)$ & reciprocal monic Chebyshev; the polynomial actually applied as the FIR filter \\
 $p(z) = \tilde T_d^*(z)$ & the FIR polynomial: $p(z) = 1 - z^2 + z^4/8$ for $d=4$ \\
-$h[t] = (p(B_s) x)[t]$ & full-filter output: $\sum_k a_k x[t-ks]$ at stride $s$ \\
-$\tilde h[t] = (p(B_s) x)[t] - x[t]$ & \emph{residual} preconditioning channel; this is what the model receives \\
+$h_t = (p(B_s) x)_t$ & full-filter output: $\sum_k a_k x_{t-ks}$ at stride $s$ \\
+$r_t = (p(B_s) x)_t - x_t$ & \emph{residual} preconditioning channel; this is what the model receives \\
 $H(\omega) = p(e^{-j 2\pi s \omega})$ & DTFT of the full filter: spectrum on the unit circle \\
 $\widetilde H(\omega) = H(\omega) - 1$ & DTFT of the residual filter \\
 $\boldsymbol{a}^{(d)}$ & coefficient vector of $\tilde T_d$ in the monomial basis \\
 \bottomrule
 \end{tabular}
 \end{center}
-The architectural input projection sees $\tilde h$, not $h$; analyses involving the model's input distribution use $\widetilde H$. Analyses concerning the LDS algebraic identity (Section~\ref{sec:mh-regret}) use $p$ and $p^*$; the spectral-radius bound goes through $\sup_{[-\rho,\rho]} \abs{p}$, which equals $\sup_{[-\rho,\rho]} \abs{p^*}$ since $p$ and $p^*$ have the same coefficient set up to reversal.
+The architectural input projection sees $r$, not $h$; analyses involving the model's input distribution use $\widetilde H$. Analyses concerning the LDS algebraic identity (Section~\ref{sec:mh-regret}) use $p$ and $p^*$; the spectral-radius bound goes through $\sup_{[-\rho,\rho]} \abs{p}$, which equals $\sup_{[-\rho,\rho]} \abs{p^*}$ since $p$ and $p^*$ have the same coefficient set up to reversal.
 
 \subsection{Chebyshev Minimax and the Equioscillation Theorem}
 
@@ -319,7 +421,7 @@ Corollary~\ref{cor:spectral-compression} captures the worst-case spectral-shrink
 
 \subsection{Frequency Response of the Preconditioning Filter}
 
-Our preconditioning filter is defined by $h[t] = (p(B_s) x)[t]$ with $p(z) = \sum_{k=0}^d a_k z^k$, where $B_s$ denotes the shift-by-$s$ operator and the coefficients $(a_0, \ldots, a_d)$ are chosen such that $a_0 = 1$ and $(a_1, \ldots, a_d)$ are the lower-order monic-Chebyshev coefficients in reverse order. Explicitly for $d = 4$: $(a_0, a_1, a_2, a_3, a_4) = (1, 0, -1, 0, 1/8)$, so $p(z) = 1 - z^2 + z^4 / 8$. We call this polynomial the \emph{reciprocal monic Chebyshev} $\tilde T_d^*(z) := z^d \tilde T_d(1/z)$; it agrees with $\tilde T_d$ up to a change of variable and scales identically.
+Our preconditioning filter is defined by $h_t = (p(B_s) x)_t$ with $p(z) = \sum_{k=0}^d a_k z^k$, where $B_s$ denotes the shift-by-$s$ operator and the coefficients $(a_0, \ldots, a_d)$ are chosen such that $a_0 = 1$ and $(a_1, \ldots, a_d)$ are the lower-order monic-Chebyshev coefficients in reverse order. Explicitly for $d = 4$: $(a_0, a_1, a_2, a_3, a_4) = (1, 0, -1, 0, 1/8)$, so $p(z) = 1 - z^2 + z^4 / 8$. We call this polynomial the \emph{reciprocal monic Chebyshev} $\tilde T_d^*(z) := z^d \tilde T_d(1/z)$; it agrees with $\tilde T_d$ up to a change of variable and scales identically.
 
 \begin{theorem}[Frequency Response and Attenuation Values]
 \label{thm:freq-response}
@@ -362,24 +464,24 @@ The attenuation minima for our main experimental setting lie at $\omega \in \{0,
 
 \begin{lemma}[BIBO Stability and Variance Preservation]
 \label{lem:stability}
-Let $x$ be a real-valued sequence with $\sup_t \abs{x[t]} \leq M$ and $\Var(x[t]) \leq \sigma^2$, and let $h[t] = (\tilde T_d^*(B_s) x)[t]$ for $d \geq 1$ and $s \geq 1$. Then:
+Let $x$ be a real-valued sequence with $\sup_t \abs{x_t} \leq M$ and $\Var(x_t) \leq \sigma^2$, and let $h_t = (\tilde T_d^*(B_s) x)_t$ for $d \geq 1$ and $s \geq 1$. Then:
 \begin{enumerate}[leftmargin=1.5em, itemsep=0.1em]
-    \item (BIBO stability) $\sup_t \abs{h[t]} \leq C_d \cdot M$ where $C_d = \sum_{k=0}^{d} \abs{a_k}$ is the $\ell^1$ norm of the filter coefficients.
-    \item (Variance bound) If $x$ is wide-sense stationary, $\Var(h[t]) \leq \big(\sum_k a_k^2\big) \, \sigma^2 + 2 \sum_{k \neq \ell} \abs{a_k a_\ell} \sigma^2 = \big(\sum_k \abs{a_k}\big)^2 \sigma^2 = C_d^2 \sigma^2$.
+    \item (BIBO stability) $\sup_t \abs{h_t} \leq C_d \cdot M$ where $C_d = \sum_{k=0}^{d} \abs{a_k}$ is the $\ell^1$ norm of the filter coefficients.
+    \item (Variance bound) If $x$ is wide-sense stationary, $\Var(h_t) \leq \big(\sum_k a_k^2\big) \, \sigma^2 + 2 \sum_{k \neq \ell} \abs{a_k a_\ell} \sigma^2 = \big(\sum_k \abs{a_k}\big)^2 \sigma^2 = C_d^2 \sigma^2$.
 \end{enumerate}
-For $d = 4$, $C_4 = 1 + 1 + 1/8 = 2.125$, giving $\sup_t \abs{h[t]} \leq 2.125 M$ and $\Var(h[t]) \leq 4.52 \sigma^2$.
+For $d = 4$, $C_4 = 1 + 1 + 1/8 = 2.125$, giving $\sup_t \abs{h_t} \leq 2.125 M$ and $\Var(h_t) \leq 4.52 \sigma^2$.
 \end{lemma}
 
 \begin{proof}
-Both bounds are immediate from the triangle inequality applied to $h[t] = \sum_k a_k x[t-ks]$.\qedhere
+Both bounds are immediate from the triangle inequality applied to $h_t = \sum_k a_k x_{t-ks}$.\qedhere
 \end{proof}
 
-Lemma~\ref{lem:stability} ensures that the preconditioning channel does not cause pathological numerical behaviour. In practice we find the empirical variance ratio $\Var(h[t]) / \Var(x[t])$ to be much smaller than the upper bound $C_d^2$ for realistic time series, because of non-adversarial correlation structure.
+Lemma~\ref{lem:stability} ensures that the preconditioning channel does not cause pathological numerical behaviour. In practice we find the empirical variance ratio $\Var(h_t) / \Var(x_t)$ to be much smaller than the upper bound $C_d^2$ for realistic time series, because of non-adversarial correlation structure.
 
 \subsection{Noise Gain and the Spectral--Noise Tradeoff}
 \label{sec:noise-gain}
 
-The heuristic regret reduction of Section~\ref{sec:mh-regret} contains two competing terms whose dependence on the filter degree $d$ runs in opposite directions: a \emph{spectral residual} that scales with $\rho(p^*(A))^2$ and shrinks as $4^{1-d}$, and a \emph{noise-gain} term $\norm{\boldsymbol{a}}_2^2 \trace(\Sigma_e)$ that grows with the filter's $\ell^2$ coefficient norm. We make the noise-gain side of this tradeoff quantitative.
+The heuristic regret reduction of Section~\ref{sec:mh-regret} contains two competing terms whose dependence on the filter degree $d$ runs in opposite directions: a \emph{spectral residual} that scales with $\rho(p^*(A))^2$ and shrinks as $4^{1-d}$, and a \emph{noise-gain} term $\norm{\boldsymbol{a}}_2^2 \trace(\Sigma_v)$ that grows with the filter's $\ell^2$ coefficient norm. We make the noise-gain side of this tradeoff quantitative.
 
 \begin{lemma}[Noise Gain of Chebyshev Preconditioning]
 \label{lem:noise-gain}
@@ -412,7 +514,7 @@ For our application: at $d = 4$, the squared-spectral residual decays by a facto
 \subsection{The Residual Filter $p(B) - 1$}
 \label{sec:residual-filter}
 
-Our architecture concatenates the \emph{residual} preconditioning channel $\tilde h[t] := (p(B_s) x)[t] - x[t] = ((p - 1)(B_s) x)[t]$, not the raw filter output, since the original channel $x[t]$ is already provided to the input projection. We characterize the residual filter's frequency response.
+Our architecture concatenates the \emph{residual} preconditioning channel $r_t := (p(B_s) x)_t - x_t = ((p - 1)(B_s) x)_t$, not the raw filter output, since the original channel $x_t$ is already provided to the input projection. We characterize the residual filter's frequency response.
 
 \begin{proposition}[Residual Filter Frequency Response]
 \label{prop:residual-filter}
@@ -521,7 +623,7 @@ Our experiments are conducted on the \emph{Moirai-2 Small} time series foundatio
 \subsection{Patches and the Per-Patch Projection}
 \label{sec:patches}
 
-A patch-based transformer forecaster~\citep{nie2023patchtst, woo2024unified, liu2024moirai2} proceeds as follows. Given a univariate history $x[1{:}T]$, partition it into non-overlapping patches $\mathbf{p}_i = (x[(i{-}1)P{+}1], \ldots, x[iP])$ of length $P$ for $i=1, \ldots, T/P$. A per-patch projection (in Moirai-2, a residual block of two linear layers with a SiLU nonlinearity) maps each patch to an embedding $\mathbf{e}_i \in \R^{d_{\text{model}}}$. These embeddings are fed to a transformer block stack whose output is decoded into a predictive distribution over future patches via a per-patch projection head. Two features of this architecture are salient for our development:
+A patch-based transformer forecaster~\citep{nie2023patchtst, woo2024unified, liu2024moirai2} proceeds as follows. Given a univariate history $x_{1:T}$, partition it into non-overlapping patches $\mathbf{p}_i = (x_{(i-1)P+1}, \ldots, x_{iP})$ of length $P$ for $i=1, \ldots, T/P$. A per-patch projection (in Moirai-2, a residual block of two linear layers with a SiLU nonlinearity) maps each patch to an embedding $\mathbf{e}_i \in \R^{d_{\text{model}}}$. These embeddings are fed to a transformer block stack whose output is decoded into a predictive distribution over future patches via a per-patch projection head. Two features of this architecture are salient for our development:
 \begin{itemize}[leftmargin=1.5em, itemsep=0.1em, topsep=0.2em]
     \item \emph{Cross-patch information must be learned via attention.} Before the first self-attention operation, $\mathbf{e}_i$ is a function of $\mathbf{p}_i$ alone; it contains no information about $\mathbf{p}_{i-1}$, $\mathbf{p}_{i+1}$, or more distant patches. Patterns whose natural temporal scale exceeds $P$ time steps (e.g., daily periodicities in $15$-minute data, spanning $96$ steps or $6$ patches at $P=16$) must be discovered end-to-end by the attention layers above the projection.
     \item \emph{The per-patch projection is narrow.} For Moirai-2 Small ($P=16$, $d_{\text{model}}=384$), the projection's input dimension is $2P = 32$ (target plus observation mask), so it has roughly $32 \cdot 384 \approx 12{,}000$ parameters out of $11.4$M total ($\sim 0.1\%$). Adding a third $P$-dimensional input channel costs an additional $P \cdot d_{\text{model}} = 6{,}144$ parameters; altering downstream layers, in contrast, is much more expensive.
@@ -615,13 +717,13 @@ Three features of the Moirai-2 setup interact with our method in ways that frame
 
 \subsection{Architecture}
 
-Let $x \in \R^T$ be a univariate time series that has been normalized to zero mean and unit variance. Our method modifies a standard patch-based transformer forecaster by replacing the per-patch input $(\mathbf{p}_i, \mathbf{m}_i)$---target patch and observation mask---by the augmented triple $(\mathbf{p}_i, \mathbf{m}_i, \tilde{\mathbf{h}}_i)$, where the \emph{preconditioning residual}
+Let $x \in \R^T$ be a univariate time series that has been normalized to zero mean and unit variance. Our method modifies a standard patch-based transformer forecaster by replacing the per-patch input $(\mathbf{p}_i, \mathbf{m}_i)$---target patch and observation mask---by the augmented triple $(\mathbf{p}_i, \mathbf{m}_i, \mathbf{r}_i)$, where the \emph{preconditioning residual}
 \[
-    \tilde h[t] \;:=\; \tilde T_d^*(B_s) x[t] - x[t]
+    r_t \;:=\; \tilde T_d^*(B_s) x_t - x_t
 \]
-is computed over the entire (normalized) series before patching and $\tilde{\mathbf{h}}_i$ is the $P$-length window of $\tilde h$ aligned with the $i$-th patch. We work with the residual rather than the full filter output so that the preconditioning channel captures the \emph{novel} information introduced by preconditioning (subtracting the raw signal, which is already available in $\mathbf{p}_i$). The per-patch projection becomes
+is computed over the entire (normalized) series before patching and $\mathbf{r}_i$ is the $P$-length window of $r$ aligned with the $i$-th patch. We work with the residual rather than the full filter output so that the preconditioning channel captures the \emph{novel} information introduced by preconditioning (subtracting the raw signal, which is already available in $\mathbf{p}_i$). The per-patch projection becomes
 \begin{equation}
-    \mathbf{e}_i = \text{ResBlock}_{3P \to d}([\mathbf{p}_i; \mathbf{m}_i; \tilde{\mathbf{h}}_i]) \in \R^d,
+    \mathbf{e}_i = \text{ResBlock}_{3P \to d}([\mathbf{p}_i; \mathbf{m}_i; \mathbf{r}_i]) \in \R^d,
 \end{equation}
 where $\text{ResBlock}$ consists of a widened linear layer followed by a SiLU nonlinearity, a second linear layer, and a residual connection. Only the first linear layer widens; downstream layers are unchanged.
 
@@ -714,7 +816,7 @@ Figure~\ref{fig:synth-spectrum} shows the power spectral density (Welch-estimate
 \end{figure}
 
 \paragraph{Validation of Lemma~\ref{lem:noise-gain}: noise gain of the preconditioning filter.}
-The Marsden--Hazan regret bound contains two competing terms (Section~\ref{sec:noise-gain}): a spectral residual that decays as $4^{1-d}$ and a noise gain $T \cdot \norm{\boldsymbol{a}^{(d)}}_2^2 \cdot \trace(\Sigma_e)$ that grows with $d$. Lemma~\ref{lem:noise-gain} fixes the exact noise-gain norms: $\norm{\boldsymbol{a}^{(0)}}_2^2 = 1$, $\norm{\boldsymbol{a}^{(2)}}_2^2 = 5/4$, $\norm{\boldsymbol{a}^{(4)}}_2^2 = 129/64 \approx 2.02$. To test these predictions in isolation, we deliberately put preconditioning in the regime where the spectral-residual term is \emph{not} the bottleneck, by running a forecaster that is already well-specified for the LDS dynamics: an offline batch-fit AR($L=3$) predictor.
+The Marsden--Hazan regret bound contains two competing terms (Section~\ref{sec:noise-gain}): a spectral residual that decays as $4^{1-d}$ and a noise gain $T \cdot \norm{\boldsymbol{a}^{(d)}}_2^2 \cdot \trace(\Sigma_v)$ that grows with $d$. Lemma~\ref{lem:noise-gain} fixes the exact noise-gain norms: $\norm{\boldsymbol{a}^{(0)}}_2^2 = 1$, $\norm{\boldsymbol{a}^{(2)}}_2^2 = 5/4$, $\norm{\boldsymbol{a}^{(4)}}_2^2 = 129/64 \approx 2.02$. To test these predictions in isolation, we deliberately put preconditioning in the regime where the spectral-residual term is \emph{not} the bottleneck, by running a forecaster that is already well-specified for the LDS dynamics: an offline batch-fit AR($L=3$) predictor.
 
 \begin{figure}[h]
 \centering
@@ -735,7 +837,7 @@ Why does the same filter help a pretrained transformer (Section~\ref{sec:main-re
 \subsection{Spectral-Correlate Analysis on GIFT-Eval}
 \label{sec:spectral-correlate}
 
-To test the spectral mechanism at the dataset level, we ask whether datasets whose spectral mass aligns with frequencies the filter \emph{preserves} benefit more than datasets whose mass aligns with frequencies the filter \emph{attenuates}. Since the model receives the residual channel $\tilde h[t] = (p(B_s)x - x)[t]$ rather than the raw filter output, the relevant frequency response is $\widetilde H(\omega) := H(\omega) - 1$ (Section~\ref{sec:residual-filter}); the natural dataset-level statistic is therefore the \emph{residual passband fraction}, the proportion of average Welch-estimated periodogram power lying in frequencies where $\abs{\widetilde H(\omega)}^2$ exceeds its median over $[0, 1/2]$.
+To test the spectral mechanism at the dataset level, we ask whether datasets whose spectral mass aligns with frequencies the filter \emph{preserves} benefit more than datasets whose mass aligns with frequencies the filter \emph{attenuates}. Since the model receives the residual channel $r_t = (p(B_s)x - x)_t$ rather than the raw filter output, the relevant frequency response is $\widetilde H(\omega) := H(\omega) - 1$ (Section~\ref{sec:residual-filter}); the natural dataset-level statistic is therefore the \emph{residual passband fraction}, the proportion of average Welch-estimated periodogram power lying in frequencies where $\abs{\widetilde H(\omega)}^2$ exceeds its median over $[0, 1/2]$.
 
 The empirical analysis below uses the \emph{full}-filter passband indicator $\mathbb{1}[\abs{H(\omega)}^2 > \mathrm{med}(\abs{H}^2)]$ as a proxy for the residual indicator. For our specific $d=4$, $s=16$ filter, $\abs{H}^2$ and $\abs{\widetilde H}^2$ have the same poles and qualitatively similar passband structure (both attenuate the harmonics $\omega_k = k/(2s)$ of Theorem~\ref{thm:freq-response}, though with different gains: $\abs{H}^2 \in [1/64, 289/64]$, $\abs{\widetilde H}^2 \in [1/64, 81/64]$). Both proxies should detect the same direction of association with dataset spectral mass, but the magnitudes will differ; we treat the existing analysis as a coarse qualitative test.
 
@@ -761,15 +863,15 @@ Let $S_x(\omega)$ denote the (unit-normalized) power spectral density of a wide-
 
 \begin{proposition}[Plancherel Identity for Residual-Filtered Signal Power]
 \label{prop:plancherel}
-Let $x$ be wide-sense stationary with $\E[x[t]] = 0$ and PSD $S_x$, and let $\tilde h = (p(B_s) - 1) x$ be the residual-filtered signal. Then
+Let $x$ be wide-sense stationary with $\E[x_t] = 0$ and PSD $S_x$, and let $r = (p(B_s) - 1) x$ be the residual-filtered signal. Then
 \[
-    \E\big[\tilde h[t]^2\big] \;=\; \int_{-1/2}^{1/2} S_x(\omega) \, \abs{\widetilde H(\omega)}^2 \, d\omega \;=\; 2 \, \widetilde O(x).
+    \E\big[r_t^2\big] \;=\; \int_{-1/2}^{1/2} S_x(\omega) \, \abs{\widetilde H(\omega)}^2 \, d\omega \;=\; 2 \, \widetilde O(x).
 \]
 That is, $\widetilde O(x)$ is exactly the post-residual-filter signal power (up to the symmetry factor $2$ for real signals).
 \end{proposition}
 
 \begin{proof}
-Standard. By the convolution theorem, the autocorrelation of $\tilde h$ satisfies $R_{\tilde h}[\tau] = (R_x * (\tilde h * \tilde h^{(-)}))[\tau]$ where $\tilde h^{(-)}[k] = \tilde h[-k]$, and Fourier-transforming both sides gives $S_{\tilde h}(\omega) = S_x(\omega) \abs{\widetilde H(\omega)}^2$. Integrating $S_{\tilde h}$ over one full period yields the variance of $\tilde h$.\qedhere
+Standard. By the convolution theorem, the autocorrelation of $r$ satisfies $R_{r}[\tau] = (R_x * (r * r^{(-)}))[\tau]$ where $r^{(-)}[k] = r_{-k}$, and Fourier-transforming both sides gives $S_{r}(\omega) = S_x(\omega) \abs{\widetilde H(\omega)}^2$. Integrating $S_{r}$ over one full period yields the variance of $r$.\qedhere
 \end{proof}
 
 The passband-fraction proxy of Section~\ref{sec:spectral-correlate} replaces the magnitude $\abs{\widetilde H(\omega)}^2$ by an indicator at its median; the existing analysis additionally substitutes $\abs{H(\omega)}^2$ for $\abs{\widetilde H(\omega)}^2$. Both substitutions discard magnitude information but preserve the qualitative passband structure (since $H$ and $\widetilde H = H - 1$ share the same critical frequencies; their gains differ but their high-/low-gain band locations agree). The continuous overlap $\widetilde O(x)$ is the post-residual-filter signal power.
@@ -989,7 +1091,7 @@ All evaluations use the GIFT-Eval benchmark \citep{vijay2024gifteval} with 97 da
 
 The Chebyshev polynomial $T_d(z)$ is expanded in the monomial basis to obtain FIR filter coefficients $c_0, \ldots, c_d$. The preconditioned signal for time step $t$ is
 \[
-    \tilde{h}[t] \;=\; \left(\sum_{k=0}^{d} c_k \, x[t - ks]\right) - x[t],
+    r_t \;=\; \left(\sum_{k=0}^{d} c_k \, x_{t-ks}\right) - x_t,
 \]
 computed over the full (normalized, zero-mean unit-variance) time series before patching. Unobserved time steps are masked to zero. During training with channel dropout $p$, each patch's preconditioning channel independently has probability $p$ of being replaced with zeros. At inference, the full preconditioning channel is always provided.
 
@@ -1165,7 +1267,7 @@ Latent preconditioning is catastrophic. The filter must operate on the raw time 
 \label{app:poly-coeffs}
 %==============================================================================
 
-This appendix lists the explicit FIR coefficients for every polynomial basis discussed in this paper. Throughout, we use the convention of Section~\ref{sec:precondition}: the residual filter applied to the input is $\tilde h[t] = (p(B_s) x)[t] - x[t] = \sum_{k=1}^{d} c_k x[t - ks]$, where $c_1, \ldots, c_d$ are the non-leading coefficients of the monic polynomial $p$ ordered so that $c_k$ is the coefficient of $z^{d-k}$ in $z^d p(1/z)$ (the reciprocal monic polynomial). The default stride is $s = P = 16$.
+This appendix lists the explicit FIR coefficients for every polynomial basis discussed in this paper. Throughout, we use the convention of Section~\ref{sec:precondition}: the residual filter applied to the input is $r_t = (p(B_s) x)_t - x_t = \sum_{k=1}^{d} c_k x_{t-ks}$, where $c_1, \ldots, c_d$ are the non-leading coefficients of the monic polynomial $p$ ordered so that $c_k$ is the coefficient of $z^{d-k}$ in $z^d p(1/z)$ (the reciprocal monic polynomial). The default stride is $s = P = 16$.
 
 \paragraph{Monic Chebyshev (first kind), $\tilde T_d(x) = T_d(x)/2^{d-1}$.}
 The classical Chebyshev polynomials satisfy the recurrence $T_0 = 1$, $T_1(x) = x$, $T_{d+1}(x) = 2x T_d(x) - T_{d-1}(x)$. After dividing by the leading coefficient $2^{d-1}$, the monic forms are obtained explicitly. The reciprocal-monic FIR coefficients $(c_1, \ldots, c_d)$ at stride $s$ are listed in Table~\ref{tab:cheb-coeffs}.
@@ -1177,28 +1279,28 @@ The classical Chebyshev polynomials satisfy the recurrence $T_0 = 1$, $T_1(x) = 
 \small
 \begin{tabular}{rlcl}
 \toprule
-$d$ & $\tilde T_d(x)$ & FIR $(c_1, \ldots, c_d)$ & Residual $\tilde h[t]$ at $s = 16$ \\
+$d$ & $\tilde T_d(x)$ & FIR $(c_1, \ldots, c_d)$ & Residual $r_t$ at $s = 16$ \\
 \midrule
-$2$ & $x^2 - \tfrac{1}{2}$                                       & $(0, -\tfrac{1}{2})$                            & $-\tfrac{1}{2} x[t-32]$ \\
-$3$ & $x^3 - \tfrac{3}{4} x$                                     & $(0, -\tfrac{3}{4}, 0)$                         & $-\tfrac{3}{4} x[t-32]$ \\
-$\mathbf{4}$ & $x^4 - x^2 + \tfrac{1}{8}$                        & $\mathbf{(0, -1, 0, \tfrac{1}{8})}$              & $\mathbf{-x[t-32] + \tfrac{1}{8} \, x[t-64]}$ \\
-$5$ & $x^5 - \tfrac{5}{4} x^3 + \tfrac{5}{16} x$                 & $(0, -\tfrac{5}{4}, 0, \tfrac{5}{16}, 0)$       & $-\tfrac{5}{4} x[t-32] + \tfrac{5}{16} x[t-64]$ \\
-$6$ & $x^6 - \tfrac{3}{2} x^4 + \tfrac{9}{16} x^2 - \tfrac{1}{32}$ & $(0, -\tfrac{3}{2}, 0, \tfrac{9}{16}, 0, -\tfrac{1}{32})$ & $-\tfrac{3}{2} x[t-32] + \tfrac{9}{16} x[t-64] - \tfrac{1}{32} x[t-96]$ \\
-$7$ & $x^7 - \tfrac{7}{4} x^5 + \tfrac{14}{16} x^3 - \tfrac{7}{64} x$ & $(0, -\tfrac{7}{4}, 0, \tfrac{14}{16}, 0, -\tfrac{7}{64}, 0)$ & $-\tfrac{7}{4} x[t-32] + \tfrac{7}{8} x[t-64] - \tfrac{7}{64} x[t-96]$ \\
-$8$ & $x^8 - 2 x^6 + \tfrac{5}{4} x^4 - \tfrac{1}{4} x^2 + \tfrac{1}{128}$ & $(0, -2, 0, \tfrac{5}{4}, 0, -\tfrac{1}{4}, 0, \tfrac{1}{128})$ & $-2 x[t-32] + \tfrac{5}{4} x[t-64] - \tfrac{1}{4} x[t-96] + \tfrac{1}{128} x[t-128]$ \\
+$2$ & $x^2 - \tfrac{1}{2}$                                       & $(0, -\tfrac{1}{2})$                            & $-\tfrac{1}{2} x_{t-32}$ \\
+$3$ & $x^3 - \tfrac{3}{4} x$                                     & $(0, -\tfrac{3}{4}, 0)$                         & $-\tfrac{3}{4} x_{t-32}$ \\
+$\mathbf{4}$ & $x^4 - x^2 + \tfrac{1}{8}$                        & $\mathbf{(0, -1, 0, \tfrac{1}{8})}$              & $\mathbf{-x_{t-32} + \tfrac{1}{8} \, x_{t-64}}$ \\
+$5$ & $x^5 - \tfrac{5}{4} x^3 + \tfrac{5}{16} x$                 & $(0, -\tfrac{5}{4}, 0, \tfrac{5}{16}, 0)$       & $-\tfrac{5}{4} x_{t-32} + \tfrac{5}{16} x_{t-64}$ \\
+$6$ & $x^6 - \tfrac{3}{2} x^4 + \tfrac{9}{16} x^2 - \tfrac{1}{32}$ & $(0, -\tfrac{3}{2}, 0, \tfrac{9}{16}, 0, -\tfrac{1}{32})$ & $-\tfrac{3}{2} x_{t-32} + \tfrac{9}{16} x_{t-64} - \tfrac{1}{32} x_{t-96}$ \\
+$7$ & $x^7 - \tfrac{7}{4} x^5 + \tfrac{14}{16} x^3 - \tfrac{7}{64} x$ & $(0, -\tfrac{7}{4}, 0, \tfrac{14}{16}, 0, -\tfrac{7}{64}, 0)$ & $-\tfrac{7}{4} x_{t-32} + \tfrac{7}{8} x_{t-64} - \tfrac{7}{64} x_{t-96}$ \\
+$8$ & $x^8 - 2 x^6 + \tfrac{5}{4} x^4 - \tfrac{1}{4} x^2 + \tfrac{1}{128}$ & $(0, -2, 0, \tfrac{5}{4}, 0, -\tfrac{1}{4}, 0, \tfrac{1}{128})$ & $-2 x_{t-32} + \tfrac{5}{4} x_{t-64} - \tfrac{1}{4} x_{t-96} + \tfrac{1}{128} x_{t-128}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-For odd $d$, the residual filter at stride $s$ has a tap at $x[t - 0] = x[t]$ that cancels with the identity term, so the residual contains only \emph{even} lags $2s, 4s, \ldots$, regardless of polynomial parity in $x$. For example, the $d=3$ residual at $s = 16$ is supported only at lag $32$; the $d=5$ residual at $s = 16$ is supported at lags $32$ and $64$.
+For odd $d$, the residual filter at stride $s$ has a tap at $x_{t-0} = x_t$ that cancels with the identity term, so the residual contains only \emph{even} lags $2s, 4s, \ldots$, regardless of polynomial parity in $x$. For example, the $d=3$ residual at $s = 16$ is supported only at lag $32$; the $d=5$ residual at $s = 16$ is supported at lags $32$ and $64$.
 
 \paragraph{Monic Chebyshev second kind, $\tilde U_d(x) = U_d(x)/2^d$.}
 Defined by $U_0 = 1$, $U_1(x) = 2x$, $U_{d+1}(x) = 2x U_d(x) - U_{d-1}(x)$. The first few monic forms and corresponding residual FIRs at $s = 16$ are:
 \[
 \begin{aligned}
-\tilde U_2(x) &= x^2 - \tfrac{1}{4}, &\quad \tilde h[t] &= -\tfrac{1}{4} x[t-32], \\
-\tilde U_3(x) &= x^3 - \tfrac{1}{2} x, &\quad \tilde h[t] &= -\tfrac{1}{2} x[t-32], \\
-\tilde U_4(x) &= x^4 - \tfrac{3}{4} x^2 + \tfrac{1}{16}, &\quad \tilde h[t] &= -\tfrac{3}{4} x[t-32] + \tfrac{1}{16} x[t-64].
+\tilde U_2(x) &= x^2 - \tfrac{1}{4}, &\quad r_t &= -\tfrac{1}{4} x_{t-32}, \\
+\tilde U_3(x) &= x^3 - \tfrac{1}{2} x, &\quad r_t &= -\tfrac{1}{2} x_{t-32}, \\
+\tilde U_4(x) &= x^4 - \tfrac{3}{4} x^2 + \tfrac{1}{16}, &\quad r_t &= -\tfrac{3}{4} x_{t-32} + \tfrac{1}{16} x_{t-64}.
 \end{aligned}
 \]
 The $\ell_\infty$ norm of monic $\tilde U_d$ on $[-1,1]$ is $1/2^{d-1}$ \citep[Eq.~1.41]{mason2003chebyshev}, twice that of $\tilde T_d$, so the spectral attenuation predicted by the equioscillation argument is half as strong as for the first kind.
@@ -1207,24 +1309,24 @@ The $\ell_\infty$ norm of monic $\tilde U_d$ on $[-1,1]$ is $1/2^{d-1}$ \citep[E
 Defined by Bonnet's recurrence $(d+1) P_{d+1}(x) = (2d+1) x P_d(x) - d P_{d-1}(x)$, $P_0 = 1$, $P_1(x) = x$. The leading coefficient of $P_d$ is $(2d)!/(2^d (d!)^2)$, so dividing by it yields the monic form. The first few monic Legendre polynomials and residual FIRs at $s = 16$ are:
 \[
 \begin{aligned}
-\tilde P_2(x) &= x^2 - \tfrac{1}{3}, &\quad \tilde h[t] &= -\tfrac{1}{3} x[t-32], \\
-\tilde P_3(x) &= x^3 - \tfrac{3}{5} x, &\quad \tilde h[t] &= -\tfrac{3}{5} x[t-32], \\
-\tilde P_4(x) &= x^4 - \tfrac{6}{7} x^2 + \tfrac{3}{35}, &\quad \tilde h[t] &= -\tfrac{6}{7} x[t-32] + \tfrac{3}{35} x[t-64].
+\tilde P_2(x) &= x^2 - \tfrac{1}{3}, &\quad r_t &= -\tfrac{1}{3} x_{t-32}, \\
+\tilde P_3(x) &= x^3 - \tfrac{3}{5} x, &\quad r_t &= -\tfrac{3}{5} x_{t-32}, \\
+\tilde P_4(x) &= x^4 - \tfrac{6}{7} x^2 + \tfrac{3}{35}, &\quad r_t &= -\tfrac{6}{7} x_{t-32} + \tfrac{3}{35} x_{t-64}.
 \end{aligned}
 \]
 The $\ell_\infty$ norm of monic $\tilde P_d$ on $[-1,1]$ is strictly larger than that of $\tilde T_d$ for all $d \geq 2$: their ratio is $2 \binom{2d}{d}/4^d \to 2/\sqrt{\pi d}$ as $d \to \infty$ (Proposition~\ref{prop:cheb-vs-legendre}). Legendre minimises the $\ell_2$ norm $\bigl(\int_{-1}^{1} p(x)^2 \, dx\bigr)^{1/2}$ rather than the $\ell_\infty$ norm.
 
 \paragraph{Other bases used in ablations.}
 \begin{itemize}[leftmargin=1.5em]
-    \item \textbf{Finite-difference} (degree $d$): $p(z) = (z - 1)^d$. For $d = 4$ at $s = 16$ this expands to $\tilde h[t] = -4 x[t-16] + 6 x[t-32] - 4 x[t-48] + x[t-64]$. Heavy high-pass behaviour, no spectral-attenuation guarantee.
-    \item \textbf{Exponential moving average} (EMA, half-life $\tau$): a one-sided low-pass filter with infinite impulse response $h[k] = (1-\alpha) \alpha^k$, truncated to the window we use. Not polynomial-based.
+    \item \textbf{Finite-difference} (degree $d$): $p(z) = (z - 1)^d$. For $d = 4$ at $s = 16$ this expands to $r_t = -4 x_{t-16} + 6 x_{t-32} - 4 x_{t-48} + x_{t-64}$. Heavy high-pass behaviour, no spectral-attenuation guarantee.
+    \item \textbf{Exponential moving average} (EMA, half-life $\tau$): a one-sided low-pass filter with infinite impulse response coefficients $a_k = (1-\alpha) \alpha^k$, truncated to the window we use. Not polynomial-based.
     \item \textbf{Learned FIR} (no fixed basis): the model learns the $d = 4$ residual coefficients $(c_1, c_2, c_3, c_4) \in \R^4$ from a Gaussian initialisation jointly with the rest of the network. The learned solution depends on initialisation (Appendix~\ref{app:ablations}, Table~\ref{tab:learned-fir}).
 \end{itemize}
 
 \paragraph{Multi-scale variants.}
 The MS46 and MSHD10 variants stack two polynomial residual channels:
 \begin{itemize}[leftmargin=1.5em]
-    \item \texttt{MS46}: Chebyshev $d = 4$ at $s = 16$ \emph{and} Chebyshev $d = 6$ at $s = 16$, both stripped of the identity term. The two residuals $\tilde h^{(4)}, \tilde h^{(6)}$ are concatenated as separate channels alongside the target and mask, so the per-patch input projection widens from $2P \to d_{\text{model}}$ to $4P \to d_{\text{model}}$.
+    \item \texttt{MS46}: Chebyshev $d = 4$ at $s = 16$ \emph{and} Chebyshev $d = 6$ at $s = 16$, both stripped of the identity term. The two residuals $r^{(4)}, r^{(6)}$ are concatenated as separate channels alongside the target and mask, so the per-patch input projection widens from $2P \to d_{\text{model}}$ to $4P \to d_{\text{model}}$.
     \item \texttt{MSHD10}: same as \texttt{MS46} with $10\%$ per-patch channel dropout applied independently to each residual channel during training.
 \end{itemize}
 
@@ -1282,7 +1384,7 @@ Yearly & 5 & $-5.92\%$ & 4/5 \\
 \label{app:horizon}
 %==============================================================================
 
-The preconditioning filter for \Dnodrop{}/\HD{} ($d=4$, $s=16$) reduces to $\tilde h[t] = -x[t-32] + (1/8)\, x[t-64]$. We test whether \HD{}'s channel-dropout regularisation buys robustness on long horizons that \Dnodrop{} lacks.
+The preconditioning filter for \Dnodrop{}/\HD{} ($d=4$, $s=16$) reduces to $r_t = -x_{t-32} + (1/8)\, x_{t-64}$. We test whether \HD{}'s channel-dropout regularisation buys robustness on long horizons that \Dnodrop{} lacks.
 
 \begin{table}[h]
 \centering

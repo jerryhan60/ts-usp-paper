@@ -52,7 +52,6 @@
 \author{
   Jerry Han \\[0.5em]
   \small Department of Mathematics \\
-  \small Program in Statistics and Machine Learning \\
   \small Princeton University \\[0.5em]
   \small Advisor: Prof.\ Elad Hazan \\
   \small Second Reader: Prof.\ Amit Singer
@@ -122,7 +121,7 @@ The remainder of this paper develops the following contributions:
 \label{sec:preliminaries}
 %==============================================================================
 
-We review three strands of background that our development relies on: linear dynamical systems and their forecasting, patch-based transformer architectures, and Chebyshev approximation theory. A reader familiar with any of these may skim the corresponding subsection.
+We review two strands of background that our development relies on: linear dynamical systems and their forecasting, and Chebyshev approximation theory. The patch-based transformer architecture and the specific Moirai-2 instantiation we use are deferred to Section~\ref{sec:patch-transformers}. A reader familiar with any of these may skim the corresponding subsection.
 
 \subsection{Linear Dynamical Systems and Sequence Forecasting}
 
@@ -138,14 +137,6 @@ with initial state $h_0 \in \R^m$. In the \emph{online prediction} problem, a le
 where $\ell$ is a convex loss (typically squared error) and the minimum ranges over a comparator class such as linear functions of $y_{1:t}$.
 
 The \emph{spectral radius} $\rho(A) = \max_i |\lambda_i(A)|$ of the transition matrix controls the forecastability of the system. When $\rho(A) < 1$ (strictly stable), the memory of the system decays geometrically and classical regret bounds of order $O(\sqrt{T} \, \mathrm{poly}(m))$ are available~\citep{hazan2017learning}. When $\rho(A) = 1$ (marginally stable, e.g., pure sinusoids or integrated processes), standard bounds degrade, with the dependence on $m$ often becoming linear or worse.
-
-\subsection{Patch-based Transformer Forecasting}
-
-A patch-based transformer forecaster~\citep{nie2023patchtst, woo2024unified} proceeds as follows. Given a univariate history $x[1{:}T]$, partition it into non-overlapping patches $\mathbf{p}_i = (x[(i{-}1)P{+}1], \ldots, x[iP])$ of length $P$ for $i=1, \ldots, T/P$. A per-patch projection $W \in \R^{d \times P}$ maps each patch to an embedding $\mathbf{e}_i = W \mathbf{p}_i + b \in \R^d$. These embeddings are summed with positional encodings and fed to a standard transformer encoder, whose output predicts future patches (often jointly across a set of quantile levels via a specialized head; see~\citealp{liu2024moirai2}). Two features of this architecture are salient for our development:
-\begin{itemize}[leftmargin=1.5em, itemsep=0.1em, topsep=0.2em]
-    \item \emph{Cross-patch information must be learned via attention.} Before the first self-attention operation, $\mathbf{e}_i$ is a function of $\mathbf{p}_i$ alone; it contains no information about $\mathbf{p}_{i-1}$, $\mathbf{p}_{i+1}$, or more distant patches.
-    \item \emph{The per-patch projection $W$ is narrow.} In Moirai-2 Small, $P = 16$ and $d = 384$, so the projection has $P \cdot d = 6{,}144$ parameters (with a small additive bias and a residual structure, the effective count is $\approx 10$K). Altering the \emph{input} to this projection is therefore cheap; altering downstream layers is not.
-\end{itemize}
 
 \subsection{Chebyshev Polynomials}
 \label{sec:chebyshev-prelim}
@@ -503,6 +494,75 @@ Chebyshev outperforms Legendre by $1.92\%$ relative MASE---of similar order of m
 To give intuition for \emph{why} preconditioning might help forecasting, consider a simplified scalar online prediction problem: $x_t = \sum_{i=1}^m \alpha_i \lambda_i^t + \varepsilon_t$ with $\varepsilon_t$ sub-Gaussian, $\lambda_i \in [-1, 1]$ real, and a linear learner predicting $\hat x_{t+1} = \beta^\top x_{(t-L):t}$ over a window of length $L$. The cumulative square-error regret of such a learner against the best-in-hindsight linear predictor scales with the condition number of the design Gram matrix $G = \E[x_{(t-L):t} x_{(t-L):t}^\top]$. Preconditioning by $\tilde T_d^*$ replaces each $\lambda_i^t$ by $\tilde T_d(\lambda_i) \lambda_i^{t-d}$, attenuating modes near the boundary of $[-1,1]$ by a factor of at most $2^{1-d}$ and thus reducing $\mathrm{cond}(G)$. Making this precise requires additional care, and we defer a formal regret statement to future work. We caution that the toy intuition above does \emph{not} predict an MSE reduction for offline AR forecasters that already capture the dominant dynamics: in Section~\ref{sec:synth-lds} we confirm empirically that a well-specified AR$(L=3)$ predictor, fit by least squares on a synthetic LDS trajectory, has \emph{higher} test MSE under preconditioning, because the filter's variance amplification ($\norm{\boldsymbol{a}}_2^2 \geq 1$) outweighs its spectral-attenuation benefit for that forecaster class. The benefit of preconditioning manifests in regimes the toy bound is silent on---in particular, capacity-limited pretrained transformers facing many tasks at once.
 
 %==============================================================================
+\section{Patch-based Transformers for Forecasting}
+\label{sec:patch-transformers}
+%==============================================================================
+
+Our experiments are conducted on the \emph{Moirai-2 Small} time series foundation model~\citep{liu2024moirai2}, the open-source\footnote{Available on the HuggingFace Hub as \texttt{Salesforce/moirai-2.0-R-small}; the architecture and training recipe follow the description in \citet{liu2024moirai2}.} dense, decoder-only successor to the original Moirai encoder~\citep{woo2024unified}. We chose Moirai-2 because it is a small ($11.4$M parameter), publicly reproducible, state-of-the-art universal forecaster: small enough to train from scratch on a single H100 within wall-clock budgets compatible with five-seed ablations, yet competitive with much larger models on the GIFT-Eval benchmark. Our preconditioning method modifies only the input projection of this model; understanding the surrounding architecture, training objective, training corpus, and evaluation protocol is therefore essential context for the empirical results in Section~\ref{sec:empirical}. We summarise each in turn.
+
+\subsection{Patches and the Per-Patch Projection}
+\label{sec:patches}
+
+A patch-based transformer forecaster~\citep{nie2023patchtst, woo2024unified, liu2024moirai2} proceeds as follows. Given a univariate history $x[1{:}T]$, partition it into non-overlapping patches $\mathbf{p}_i = (x[(i{-}1)P{+}1], \ldots, x[iP])$ of length $P$ for $i=1, \ldots, T/P$. A per-patch projection (in Moirai-2, a residual block of two linear layers with a SiLU nonlinearity) maps each patch to an embedding $\mathbf{e}_i \in \R^{d_{\text{model}}}$. These embeddings are fed to a transformer block stack whose output is decoded into a predictive distribution over future patches via a per-patch projection head. Two features of this architecture are salient for our development:
+\begin{itemize}[leftmargin=1.5em, itemsep=0.1em, topsep=0.2em]
+    \item \emph{Cross-patch information must be learned via attention.} Before the first self-attention operation, $\mathbf{e}_i$ is a function of $\mathbf{p}_i$ alone; it contains no information about $\mathbf{p}_{i-1}$, $\mathbf{p}_{i+1}$, or more distant patches. Patterns whose natural temporal scale exceeds $P$ time steps (e.g., daily periodicities in $15$-minute data, spanning $96$ steps or $6$ patches at $P=16$) must be discovered end-to-end by the attention layers above the projection.
+    \item \emph{The per-patch projection is narrow.} For Moirai-2 Small ($P=16$, $d_{\text{model}}=384$), the projection's input dimension is $2P = 32$ (target plus observation mask), so it has roughly $32 \cdot 384 \approx 12{,}000$ parameters out of $11.4$M total ($\sim 0.1\%$). Adding a third $P$-dimensional input channel costs an additional $P \cdot d_{\text{model}} = 6{,}144$ parameters; altering downstream layers, in contrast, is much more expensive.
+\end{itemize}
+These two observations motivate \emph{input-side} preconditioning: a fixed FIR filter applied before patching can inject cross-patch information into each $\mathbf{e}_i$ at negligible parameter cost, leaving the rest of the network untouched.
+
+\subsection{The Moirai-2 Small Architecture}
+\label{sec:moirai-arch}
+
+Moirai-2 Small is a decoder-only transformer with $L = 6$ layers, hidden dimension $d_{\text{model}} = 384$, feed-forward dimension $d_{\text{ff}} = 1024$, $h = 6$ attention heads, and patch size $P = 16$. Each transformer block applies pre-norm self-attention with rotary position embeddings (RoPE)~\citep{su2024rope} and a SwiGLU feed-forward network~\citep{shazeer2020glu}, with RMSNorm~\citep{zhang2019rms} replacing LayerNorm throughout. A binary attention bias~\citep{liu2024moirai2} discriminates between positions in the observed prefix and positions in the prediction horizon. Inputs are $z$-scored at the sequence level before patching using a packed-sequence variant of standard $z$-score scaling. Three features of the architecture are particularly relevant to the rest of this paper:
+\begin{itemize}[leftmargin=1.5em, itemsep=0.1em, topsep=0.2em]
+    \item \emph{Decoder-only with causal mask.} Unlike the masked-language-model encoder used in Moirai 1.0~\citep{woo2024unified}, Moirai-2 attends to past patches only. Predictions for patch $i$ depend on $\mathbf{e}_1, \ldots, \mathbf{e}_i$ but not on later patches.
+    \item \emph{Multi-token prediction head.} The output projection emits, for each input patch, predictions for the next $K = 4$ patches at $9$ quantile levels $\{0.1, 0.2, \ldots, 0.9\}$, yielding $K \cdot 9 \cdot P = 576$ output values per patch.
+    \item \emph{Per-patch input residual block.} The input projection is a two-layer residual MLP $\mathrm{ResBlock}_{2P \to d_{\text{model}}}$ acting on the concatenation $[\mathbf{p}_i; \mathbf{m}_i]$ of patch and observation mask. This is the only layer that touches raw patch values; it is also the only layer modified by our method (Section~\ref{sec:method}).
+\end{itemize}
+
+\subsection{Pretraining Objective and Optimization}
+\label{sec:pretraining-objective}
+
+Each training sample is a packed sequence of patched univariate series. A random \emph{prefix ratio} (default $0.3$) determines how much of the sequence is treated as observed context; the remainder is the prediction window. Within the prediction window, the target patches are replaced by a learnable mask token, and the model is trained to predict their values. Additionally, with probability $\texttt{mask\_ratio} = 0.5$, individual patches inside the prediction window are corrupted to encourage robustness to missing observations.
+
+The training loss is the \emph{packed quantile MAE loss},
+\begin{equation}
+    \mathcal{L} \;=\; \frac{1}{N \cdot |\mathcal{Q}|} \sum_{n,t,q} \rho_q\!\left(\, y_{n,t} - \hat y_{n,t}^{(q)} \,\right),
+    \label{eq:quantile-loss}
+\end{equation}
+where the sum runs over patches in the prediction window of all packed samples, $\mathcal{Q} = \{0.1, \ldots, 0.9\}$ is the set of quantile levels, $\hat y_{n,t}^{(q)}$ is the model's $q$-quantile prediction, and $\rho_q(u) = u(q - \mathbf{1}[u < 0])$ is the standard pinball loss~\citep{koenker1978regression}. We use AdamW~\citep{loshchilov2019adamw} with $\beta_1 = 0.9$, $\beta_2 = 0.98$, $\epsilon = 10^{-6}$, weight decay $0.1$, peak learning rate $\eta = 10^{-3}$, $1{,}000$-step linear warmup, and cosine annealing to zero. Training is performed in bf16 mixed precision with batch size $256$ on a single H100 GPU. Anomaly filtering~\citep{liu2024moirai2} resamples training windows whose normalised values exceed a $z$-score threshold of $8.0$ to suppress extreme outliers in LOTSA. The full set of hyperparameters appears in Appendix~\ref{app:methodology}.
+
+\subsection{Training Corpus: LOTSA}
+\label{sec:lotsa}
+
+Moirai-2 is pretrained on the \emph{Large-scale Open Time Series Archive} (LOTSA), introduced by \citet{woo2024unified}, which aggregates $\sim 27$\,billion observations across $9$ broad domains: energy, transport, climate, cloud operations, web, sales, healthcare, nature, and economic/financial. Domains are unbalanced---a few datasets (e.g., Buildings-900K, ERA5) dominate raw observation counts---so Moirai-2 uses \emph{variate-proportional weighted sampling}: for each dataset, the sampling weight is inversely proportional to its raw observation count and proportional to the number of distinct variates, which roughly equalises the contribution of large multivariate datasets and small univariate ones. We use the released LOTSA v1 weighting scheme without modification (the \texttt{lotsa\_v1\_moirai2} configuration in the official codebase). Throughout training, each sample is normalised by its own mean and standard deviation (computed within the observed prefix) before patching.
+
+\subsection{Inference and Forecasting}
+\label{sec:inference}
+
+At inference, the model is presented with the full observed history followed by mask tokens for the prediction window. Because the multi-token head emits a $K{=}4$-patch forecast for every input patch, predictions for the prediction-window patches are read directly from the corresponding output positions; no autoregressive rollout is required for horizons of up to $K \cdot P = 64$ time steps. For longer horizons, the predicted patches are appended to the context and the procedure repeats. Each forecast at horizon $h$ produces a vector of $9$ quantile estimates at each time step; for our headline metric (MASE), we use the median ($q = 0.5$) as the point forecast.
+
+\subsection{Evaluation: GIFT-Eval}
+\label{sec:gifteval}
+
+We evaluate on \textsc{GIFT-Eval}~\citep{vijay2024gifteval}, an open benchmark of $97$ dataset $\times$ horizon configurations spanning $24$ datasets and $7$ frequency classes (sub-hourly through yearly), curated to test the zero-shot generalization claim of universal forecasters. Each configuration specifies a held-out split, prediction horizon, and patch-size convention; we follow the recommended convention of $P = 8$ for quarterly data and $P = 32$ for all other frequencies, with context length $4{,}000$. Each model's forecast is scored by the \emph{normalised MASE},
+\begin{equation}
+    \mathrm{MASE}^*(\text{model}, c) \;=\; \frac{\mathrm{MASE}(\text{model}, c)}{\mathrm{MASE}(\text{seasonal naive}, c)},
+    \label{eq:normalised-mase}
+\end{equation}
+which divides each configuration's raw MASE by the seasonal-naive baseline's MASE on the same configuration. A score below $1$ means the model beats seasonal-naive on that configuration. The headline aggregate is the geometric mean of $\mathrm{MASE}^*$ across all $97$ configurations. We report cross-seed mean and standard deviation, paired sign-test counts (out of $97$ per seed; $5 \cdot 97 = 485$ pooled across $5$ seeds), and Holm--Bonferroni-corrected $p$-values; the full statistical methodology is in Section~\ref{sec:statistics}.
+
+\subsection{Why this baseline matters for the present work}
+\label{sec:why-moirai}
+
+Three features of the Moirai-2 setup interact with our method in ways that frame the empirical results:
+\begin{enumerate}[leftmargin=1.5em, itemsep=0.1em, topsep=0.2em]
+    \item \emph{Universal training corpus.} Because LOTSA spans many domains and frequencies, the model must implicitly learn frequency-aware features. A fixed Chebyshev preconditioner provides such features ``for free'' at the input, which is consistent with the empirical observation (Appendix~\ref{app:domain}) that gains are largest on high-frequency domains whose dominant scales align with the filter's lookback structure.
+    \item \emph{Small parameter budget.} At $11.4$M parameters, Moirai-2 Small is at the lower end of the universal forecaster scale~\citep{liu2024moirai2}. This is the regime in which a fixed inductive bias is most likely to help, since the model has less capacity to discover the relevant cross-patch correlations purely through self-attention. Section~\ref{sec:discussion} discusses why our method's gains shrink at the larger Moirai-2 Base scale.
+    \item \emph{GIFT-Eval as held-out evaluation.} GIFT-Eval is held out from LOTSA, so improvements at $\mathrm{MASE}^*$ are a clean signal of better generalisation rather than overfitting to training datasets. Our $97$-configuration $\times$ $5$-seed evaluation yields $485$ paired comparisons, allowing tight bootstrap intervals and well-powered sign tests.
+\end{enumerate}
+
+%==============================================================================
 \section{Method: Polynomial Input Preconditioning}
 \label{sec:method}
 %==============================================================================
@@ -534,7 +594,7 @@ For Moirai-2 Small ($P = 16$, $d_{\text{model}} = 384$, $d_{\text{ff}} = 1024$),
 
 \subsection{Experimental Setup}
 
-We train Moirai-2 Small~\citep{liu2024moirai2} from scratch on the LOTSA corpus~\citep{woo2024unified} for $10$K optimizer steps (also $100$K in Section~\ref{sec:100k}) with batch size $256$, AdamW optimizer ($\beta_1{=}0.9, \beta_2{=}0.98, \epsilon{=}10^{-6}, \text{wd}{=}0.1$), cosine learning-rate schedule with peak $\eta = 10^{-3}$ and $1$K warmup steps, and bf16 mixed precision. We evaluate on GIFT-Eval~\citep{vijay2024gifteval} at context length $4{,}000$ across $97$ dataset $\times$ horizon configurations. Each configuration is scored by the normalized MASE (per-configuration MASE divided by the seasonal-naive baseline's MASE), and aggregated by geometric mean. All four conditions use identical training data, hyperparameters, and seeds; only the auxiliary channel content differs. We run five seeds per condition: $\{0, 1, 2, 7, 42\}$, yielding $5 \times 97 = 485$ paired comparisons per contrast.
+Our experimental protocol exactly matches Section~\ref{sec:patch-transformers}: we train Moirai-2 Small from scratch on LOTSA v1 (with the official Moirai-2 weighting) for $10$K optimizer steps---and $100$K in Section~\ref{sec:100k}---and evaluate on GIFT-Eval at context length $4{,}000$ across all $97$ dataset $\times$ horizon configurations. The four conditions of interest below share \emph{identical} training data, optimizer, schedule, seeds, and evaluation pipeline; only the content of the auxiliary input channel differs. We run five seeds per condition, $\{0, 1, 2, 7, 42\}$, yielding $5 \times 97 = 485$ paired comparisons per contrast. All headline aggregates use the geometric-mean normalised MASE of Eq.~\eqref{eq:normalised-mase}, with cross-seed mean and standard deviation reported throughout.
 
 \subsection{Main Results}
 \label{sec:main-results}
@@ -733,6 +793,7 @@ Two observations: the benefit of polynomial preconditioning \emph{grows} with tr
 
 %==============================================================================
 \section{Statistical Methodology}
+\label{sec:statistics}
 \label{sec:stats}
 %==============================================================================
 

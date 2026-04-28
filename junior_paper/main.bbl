@@ -1,4 +1,4 @@
-\begin{thebibliography}{21}
+\begin{thebibliography}{24}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -22,13 +22,6 @@ Andreas Auer, Patrick Podest, Daniel Klotz, Sebastian B{\"o}ck, G{\"u}nter
   (FMSD)}, 2025.
 \newblock URL \url{https://openreview.net/forum?id=cWrbpOZGRa}.
 
-\bibitem[Benjamini and Hochberg(1995)]{benjamini1995controlling}
-Yoav Benjamini and Yosef Hochberg.
-\newblock Controlling the false discovery rate: A practical and powerful
-  approach to multiple testing.
-\newblock \emph{Journal of the Royal Statistical Society, Series B},
-  57\penalty0 (1):\penalty0 289--300, 1995.
-
 \bibitem[Das et~al.(2024)Das, Kong, Leber, Mathews, and Sen]{das2024decoder}
 Abhimanyu Das, Weihao Kong, Andrew Leber, Rajat Mathews, and Ruhan Sen.
 \newblock A decoder-only foundation model for time-series forecasting.
@@ -49,12 +42,6 @@ Alexei Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn,
   scale.
 \newblock In \emph{ICLR}, 2021.
 
-\bibitem[Efron(1987)]{efron1987better}
-Bradley Efron.
-\newblock Better bootstrap confidence intervals.
-\newblock \emph{Journal of the American Statistical Association}, 82\penalty0
-  (397):\penalty0 171--185, 1987.
-
 \bibitem[Goswami et~al.(2024)Goswami, Szafer, Choudhry, Cai, Li, and
   Dubrawski]{goswami2024moment}
 Mononito Goswami, Konrad Szafer, Arjun Choudhry, Yifu Cai, Shuo Li, and Artur
@@ -62,10 +49,10 @@ Mononito Goswami, Konrad Szafer, Arjun Choudhry, Yifu Cai, Shuo Li, and Artur
 \newblock Moment: A family of open time-series foundation models.
 \newblock \emph{arXiv preprint arXiv:2402.03885}, 2024.
 
-\bibitem[Hazan(2016)]{hazan2016introduction}
-Elad Hazan.
-\newblock \emph{Introduction to Online Convex Optimization}.
-\newblock MIT Press, 2016.
+\bibitem[Hazan and Singh(2025)]{hazan2025onlinecontrol}
+Elad Hazan and Karan Singh.
+\newblock \emph{Introduction to Online Control}.
+\newblock Manuscript, version 1.1$\beta$, 2025.
 
 \bibitem[Hazan et~al.(2017)Hazan, Singh, and Zhang]{hazan2017learning}
 Elad Hazan, Karan Singh, and Cyril Zhang.
@@ -78,17 +65,26 @@ Elad Hazan, Holden Lee, Karan Singh, Cyril Zhang, and Yi~Zhang.
 \newblock Spectral filtering for general linear dynamical systems.
 \newblock In \emph{NeurIPS}, 2018.
 
-\bibitem[Holm(1979)]{holm1979simple}
-Sture Holm.
-\newblock A simple sequentially rejective multiple test procedure.
-\newblock \emph{Scandinavian Journal of Statistics}, 6\penalty0 (2):\penalty0
-  65--70, 1979.
+\bibitem[Hyndman and Koehler(2006)]{hyndman2006another}
+Rob~J. Hyndman and Anne~B. Koehler.
+\newblock Another look at measures of forecast accuracy.
+\newblock \emph{International Journal of Forecasting}, 2006.
+
+\bibitem[Koenker and Bassett(1978)]{koenker1978regression}
+Roger Koenker and Gilbert Bassett.
+\newblock Regression quantiles.
+\newblock \emph{Econometrica}, 46\penalty0 (1):\penalty0 33--50, 1978.
 
 \bibitem[Liu et~al.(2024)Liu, Woo, Kumar, and Sahoo]{liu2024moirai2}
 Chenghao Liu, Gerald Woo, Akshat Kumar, and Doyen Sahoo.
 \newblock Moirai-moe: Empowering time series foundation models with sparse
   mixture of experts.
 \newblock \emph{arXiv preprint arXiv:2410.10469}, 2024.
+
+\bibitem[Loshchilov and Hutter(2019)]{loshchilov2019adamw}
+Ilya Loshchilov and Frank Hutter.
+\newblock Decoupled weight decay regularization.
+\newblock In \emph{ICLR}, 2019.
 
 \bibitem[Marsden and Hazan(2024)]{marsden2024universal}
 Annie Marsden and Elad Hazan.
@@ -119,6 +115,16 @@ Thomas~W. Parks and James~H. McClellan.
   phase.
 \newblock \emph{IEEE Transactions on Circuit Theory}, 1972.
 
+\bibitem[Shazeer(2020)]{shazeer2020glu}
+Noam Shazeer.
+\newblock Glu variants improve transformer.
+\newblock \emph{arXiv preprint arXiv:2002.05202}, 2020.
+
+\bibitem[Su et~al.(2024)Su, Ahmed, Lu, Pan, Bo, and Liu]{su2024rope}
+Jianlin Su, Murtadha Ahmed, Yu~Lu, Shengfeng Pan, Wen Bo, and Yunfeng Liu.
+\newblock Roformer: Enhanced transformer with rotary position embedding.
+\newblock \emph{Neurocomputing}, 568, 2024.
+
 \bibitem[Vijay et~al.(2024)Vijay, Abid, Ansari, et~al.]{vijay2024gifteval}
 Taha Vijay, Kashif Abid, Abdul~Fatir Ansari, et~al.
 \newblock {GIFT-Eval}: A benchmark for general time series forecasting model
@@ -131,6 +137,11 @@ Gerald Woo, Chenghao Liu, Akshat Kumar, Caiming Xiong, Silvio Savarese, and
   Doyen Sahoo.
 \newblock Unified training of universal time series forecasting transformers.
 \newblock In \emph{ICML}, 2024.
+
+\bibitem[Zhang and Sennrich(2019)]{zhang2019rms}
+Biao Zhang and Rico Sennrich.
+\newblock Root mean square layer normalization.
+\newblock In \emph{NeurIPS}, 2019.
 
 \bibitem[Zhang et~al.(2025)Zhang, Zeng, Zhang, Xu, Zheng, Gao, Jiang, and
   Zheng]{zhang2025tsfmready}

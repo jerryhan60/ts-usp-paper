@@ -35,26 +35,22 @@
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-Universal Sequence Preconditioning (USP) is a recent theoretical framework for online sequence prediction that preprocesses observations via a fixed polynomial convolution, yielding hidden-dimension-free sublinear regret for marginally stable linear dynamical systems. This paper investigates whether these techniques transfer empirically to zero-shot patch-based transformer time-series forecasters such as Moirai-2. We propose \textbf{polynomial input preconditioning}, where we concatenate the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. Architecturally, we only widen the per-patch input projection ($12$K extra parameters, $0.11\%$ overhead) while leaving the transformer decoder unchanged. On GIFT-Eval ($97$ configurations, $5$ seeds) our method achieves $\Delta=-2.9\%$ geometric-mean MASE versus the Moirai-2 Small baseline (cross-seed standard deviation $< 1\%$ of MASE), winning $72$ of $97$ per-configuration means ($p < 10^{-5}$, paired sign test). Capacity-matched controls confirm that the polynomial content, not the extra parameters, drives the gain. Surprisingly, fixed Chebyshev coefficients also outperform learned FIR coefficients initialized from either Chebyshev or zero. At $100$K training steps the effect reaches $\Delta=-3.9\%$.
+Universal Sequence Preconditioning (USP) is a recent theoretical framework for online sequence prediction that preprocesses observations via a fixed polynomial convolution, yielding hidden-dimension-free sublinear regret for marginally stable linear dynamical systems. This paper investigates whether these techniques transfer empirically to zero-shot patch-based transformer time-series forecasters such as Moirai-2. We propose \textbf{polynomial input preconditioning}, where we concatenate the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. Architecturally, we only widen the per-patch input projection ($12$K extra parameters, $0.11\%$ overhead) while leaving the transformer decoder unchanged. On GIFT-Eval ($97$ configurations, $5$ seeds) our method achieves $\Delta=-2.9\%$ geometric-mean MASE versus the Moirai-2 Small baseline (cross-seed standard deviation $< 1\%$ of MASE), winning $72$ of $97$ per-configuration means ($p < 10^{-5}$, paired sign test). Capacity-matched controls confirm that the polynomial content, not the extra parameters, drives the gain. Surprisingly, fixed Chebyshev coefficients also outperform learned coefficient vectors initialized from either Chebyshev or zero. At $100$K training steps the effect reaches $\Delta=-3.9\%$.
 \end{abstract}
 
 %==============================================================================
 \section{Introduction}
 %==============================================================================
 
-\paragraph{Universal sequence preconditioning.} \citet{marsden2024universal} proposed Universal Sequence Preconditioning (USP) for online learning of linear dynamical systems. The technique generalises the classical notion of differencing: they suggest preprocessing the observations via a fixed convolution with polynomial coefficients,
+\paragraph{Universal sequence preconditioning.} \citet{marsden2024universal} proposed Universal Sequence Preconditioning (USP) for online learning of linear dynamical systems. USP generalizes differencing by applying a fixed polynomial convolution to the observed sequence:
 \[
 \tilde{x}_t \;=\; \sum_{k=0}^{d} c_k\,x_{t-ks},
 \]
-where $c_k$ are fixed coefficients and $s$ is a stride. They prove that this can result in hidden-dimension-free (up to logarithmic factors) sublinear regret with respect to the best LDS predictor. Empirically, USP with fixed Chebyshev or Legendre coefficients reduces prediction error on synthetic linear, nonlinear, and deep-RNN-generated sequences as well as the ETTh1 benchmark.
+where $c_k$ are fixed coefficients, $d$ is the polynomial degree, and $s$ is a stride. They prove that this can result in hidden-dimension-free (up to logarithmic factors) sublinear regret with respect to the best LDS predictor. Empirically, USP with fixed Chebyshev or Legendre coefficients reduces prediction error on synthetic linear, nonlinear, and deep-RNN-generated sequences as well as the ETTh1 benchmark.
 
 \paragraph{Does this transfer to zero-shot time-series forecasting?} The setting of pretrained foundation models~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} differs from USP in two important ways. First, the forecaster is trained offline on a large corpus and deployed for zero-shot prediction over a multi-step horizon, rather than making one-step predictions in an online loop where the true observation is revealed after each step; this distinction is critical because directly applying USP's target-side preconditioning to multi-step rollout leads to catastrophic error accumulation (see below). Second, the training data comes from many heterogeneous sources that may not be well-modelled as finite-dimensional LDSs.
 
-\paragraph{Our approach.} If one preconditions the target and trains the model to emit $\hat y_t^{\mathrm{pre}}$, recovering the original forecast requires the causal recurrence
-\[
-\hat y_t \;=\; \hat y_t^{\mathrm{pre}} \;-\; \sum_{k=1}^{d} c_k\, \hat y_{t-k},
-\]
-in which each recovered value depends on previously recovered (and therefore noisy) values. Prediction errors compound geometrically across the rollout. Instead, we leave the forecast target unchanged and concatenate the preconditioned signal as an auxiliary input channel alongside the raw target and the observation mask. Because the model never operates in preconditioned space at inference, no inversion is needed and error accumulation is avoided.
+\paragraph{Our approach.} If one preconditions the target and trains the model to emit preconditioned forecasts, recovering the original forecast requires a causal recurrence in which each recovered value depends on previously recovered (and therefore noisy) values. Prediction errors compound geometrically across the rollout. Instead, we leave the forecast target unchanged and concatenate the preconditioned signal as an auxiliary input channel alongside the raw target and the observation mask. Because the model never operates in preconditioned space at inference, no inversion is needed and error accumulation is avoided.
 
 A second motivation comes from the architecture itself. Patch-based transformers~\citep{nie2023patchtst,dosovitskiy2021image} split the input into non-overlapping length-$P$ windows and embed each patch independently, creating a cross-patch information bottleneck: before the first self-attention layer, each patch embedding encodes only $P$ time steps, so multi-patch correlations must be discovered entirely through attention. A polynomial preconditioner that mixes information across the same multi-patch scales before patching can inject cross-patch structure into every embedding at negligible parameter cost.
 
@@ -113,7 +109,7 @@ Duplicate (capacity ctrl)  & 0.865          & $+0.4$         & 39/97 & 0.07 \\
 \vskip -0.1in
 \end{table}
 
-Both \texttt{d4} and \texttt{d4\_dropout} improve over Baseline on every seed (Appendix~\ref{app:seeds}); their cross-seed means are within $0.1\%$ of each other, so the bulk of the gain comes from the polynomial content rather than the dropout. Zero and Duplicate share \texttt{d4\_dropout}'s architecture and $12$K-parameter overhead, isolating the causal role of polynomial content: Duplicate hurts ($39/97$ wins, below chance) and Zero is not significant ($54/97$, $p = 0.31$). A stronger test is to let the four FIR coefficients be learned end-to-end. Even then, the fixed Chebyshev filter wins: seed-0 MASE is $0.8234$ for fixed Chebyshev versus $0.8332$ when learned from Chebyshev initialization and $0.8358$ when learned from zero (Appendix~\ref{app:ablations}). Thus the gain is not just extra capacity or a convenient initialization; the fixed Chebyshev coefficients themselves are useful.
+Both \texttt{d4} and \texttt{d4\_dropout} improve over Baseline on every seed (Appendix~\ref{app:seeds}); their cross-seed means are within $0.1\%$ of each other, so the bulk of the gain comes from the polynomial content rather than the dropout. Zero and Duplicate share \texttt{d4\_dropout}'s architecture and $12$K-parameter overhead, isolating the causal role of polynomial content: Duplicate hurts ($39/97$ wins, below chance) and Zero is not significant ($54/97$, $p = 0.31$). A stronger test is to learn the four preconditioning coefficients end-to-end. Even then, the fixed Chebyshev coefficients win (Table~\ref{tab:learned-coeff-main}), so the gain is not just extra capacity or a convenient initialization; the fixed polynomial itself is useful.
 
 \paragraph{FEV-Bench.} On the independent FEV-Bench (100 tasks; full degree sweep in Appendix~\ref{app:fevbench}), \texttt{d4\_dropout} improves over Baseline by similar margins as on GIFT-Eval, confirming the benefit is not benchmark-specific.
 
@@ -148,7 +144,29 @@ $\Delta\%$ vs BL                              & $-2.91\%$       & $-3.09\%$     
 \vskip -0.1in
 \end{figure}
 
-Figure~\ref{fig:degree-sweep} sweeps Chebyshev polynomial degree $d \in \{2,\ldots,8\}$ over 5 seeds. Every $d \geq 2$ beats the baseline; the curve is shallow---$d \in \{3,4,5,6,8\}$ are all within $\sim$0.6\% of each other---so $d=4$ is representative rather than uniquely optimal. The extremes $d=2$ and $d=7$ trail the rest. Appendix~\ref{app:ablations} reports stride/basis/dropout ablations ($s = P = 16$ optimal; Chebyshev outperforms EMA/Legendre/finite-differences; dropout inverted-U with $10\%$ optimum), learned-coefficient ablations where fixed Chebyshev beats both zero- and Chebyshev-initialized learned FIR filters, and inference-time content ablations confirming the model exploits the specific polynomial structure rather than generic extra capacity.
+Figure~\ref{fig:degree-sweep} sweeps Chebyshev polynomial degree $d \in \{2,\ldots,8\}$ over 5 seeds. Every $d \geq 2$ beats the baseline; the curve is shallow---$d \in \{3,4,5,6,8\}$ are all within $\sim$0.6\% of each other---so $d=4$ is representative rather than uniquely optimal. The extremes $d=2$ and $d=7$ trail the rest, suggesting that the method is not simply rewarded for longer lookback or more nonzero coefficients.
+
+\begin{table}[t]
+\caption{Learning the four preconditioning coefficients does not beat the fixed Chebyshev choice (seed 0, 10K steps).}
+\label{tab:learned-coeff-main}
+\vskip 0.05in
+\centering
+\begin{small}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Coefficient setting} & \textbf{MASE} & \textbf{$\Delta$\% vs BL} \\
+\midrule
+\textbf{Fixed Chebyshev} & \textbf{0.8234} & $\mathbf{-4.99\%}$ \\
+Learned, Cheb. init & 0.8332 & $-3.85\%$ \\
+Learned, zero init & 0.8358 & $-3.57\%$ \\
+\bottomrule
+\end{tabular}
+\end{small}
+\vskip -0.1in
+\end{table}
+
+Table~\ref{tab:learned-coeff-main} is the most direct capacity test: the learned variants can represent the fixed Chebyshev vector, but optimization moves them to different coefficient basins and both underperform the fixed construction. Appendix~\ref{app:ablations} reports the learned coefficient values, along with stride/basis/dropout ablations ($s = P = 16$ optimal; Chebyshev outperforms EMA/Legendre/finite-differences; dropout inverted-U with $10\%$ optimum) and inference-time content ablations confirming the model exploits the specific polynomial structure rather than generic extra capacity.
 
 \subsection{Extended Training and Robustness}
 
@@ -181,7 +199,9 @@ Zero (cap.\ ctrl)      & $0.8937$        & $+1.73\%$         & $0.036$ \\
 \vskip -0.1in
 \end{figure}
 
-At 100K optimizer steps (Table~\ref{tab:100k}, 5 seeds) the relative MASE reduction reaches $-3.9\%$ while both capacity controls now actively hurt (Duplicate $+0.9\%$, Zero $+1.7\%$); \texttt{d4\_dropout} also shows much lower cross-seed variance ($\sigma = 0.009$ vs $0.019$ for BL). The training-loss curves (Fig.~\ref{fig:trainloss}) show a consistent separation that widens in the later stages of training (Appendix~\ref{app:trainloss}).
+At 100K optimizer steps (Table~\ref{tab:100k}, 5 seeds) the relative MASE reduction reaches $-3.9\%$ while both capacity controls now actively hurt (Duplicate $+0.9\%$, Zero $+1.7\%$); \texttt{d4\_dropout} also shows much lower cross-seed variance ($\sigma = 0.009$ vs $0.019$ for BL).
+
+\paragraph{Training dynamics.} The training-loss curves in Fig.~\ref{fig:trainloss} separate early and remain ordered throughout the run, with the gap widening after roughly 20K steps. This is consistent with the 100K evaluation: the preconditioning channel is not merely a short-horizon optimization aid, but continues to improve the learned predictor as training proceeds. Appendix~\ref{app:trainloss} shows that the evaluation improvement is larger than the training-loss reduction, suggesting that the fixed polynomial channel also acts as a useful inductive bias.
 
 \paragraph{Domain, frequency, and context.} The domain and frequency analyses pool all $5$ seeds ($485$ seed$\times$config observations). The benefit concentrates in high-resolution domains whose natural periodicities match the polynomial's $32/64$-step lookback: Demographics ($-9.8\%$), Transport ($-6.9\%$), Energy ($-4.0\%$); Weather ($-0.3\%$) and Healthcare ($-0.2\%$) are essentially unchanged (Appendix~\ref{app:domain}). The context-length sweep is seed 0 only; there the benefit is approximately constant ($\sim -5\%$) across context lengths $512$--$4{,}000$, and \texttt{d4\_dropout} at context $2{,}000$ outperforms the baseline at context $4{,}000$ (Appendix~\ref{app:context}).
 
@@ -193,6 +213,7 @@ At 100K optimizer steps (Table~\ref{tab:100k}, 5 seeds) the relative MASE reduct
 \vskip 0.06in
 \centering
 \begin{small}
+\setlength{\tabcolsep}{3pt}
 \begin{tabular}{lcccc}
 \toprule
 \textbf{Term} & \textbf{$n$} & \textbf{BL} & \texttt{d4} \textbf{($\Delta$)} & \texttt{d4\_dropout} \textbf{($\Delta$)} \\
@@ -214,7 +235,7 @@ long   & 21 & 0.924 & 0.880 ($-4.7\%$) & \textbf{0.874 ($-5.3\%$)} \\
 Transformer-based universal forecasters have proliferated~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex}, trained on large, heterogeneous corpora for zero-shot forecasting across unseen domains. Recent work questions whether current TSFMs meaningfully exceed simple classical baselines in the zero-shot regime~\citep{zhang2025tsfmready}---a critique that motivates exactly our regime of interest: strengthening compact foundation models at low parameter cost. Most architectural innovation in this space (rotary position embeddings, attention variants, mixture-of-experts~\citep{liu2024moirai2}) targets the transformer stack; input preconditioning is orthogonal, acting on the input representation before any attention layer.
 
 \paragraph{Spectral methods and patching.}
-\citet{hazan2017learning,hazan2018spectral} developed spectral-filtering algorithms for online LDS prediction with hidden-dimension-free guarantees; \citet{marsden2024universal} unify this line via polynomial preconditioning. Classical polynomial approximation with Chebyshev polynomials has a long tradition~\citep{parks1972chebyshev,oppenheim1999discrete}. These works are the closest conceptual antecedents, while the patch-level bottleneck in modern TSFMs~\citep{nie2023patchtst,dosovitskiy2021image,woo2024unified,liu2024moirai2} explains why the signal is useful architecturally. We do not claim a new attention or tokenization mechanism; our contribution is to apply a fixed spectral preconditioner as an input-side hint channel.
+\citet{hazan2017learning,hazan2018spectral} developed spectral-filtering algorithms for online LDS prediction with hidden-dimension-free guarantees; \citet{marsden2024universal} unify this line via polynomial preconditioning. Classical polynomial approximation with Chebyshev polynomials has a long tradition~\citep{mason2003chebyshev,oppenheim1999discrete}. These works are the closest conceptual antecedents, while the patch-level bottleneck in modern TSFMs~\citep{nie2023patchtst,dosovitskiy2021image,woo2024unified,liu2024moirai2} explains why the signal is useful architecturally. We do not claim a new attention or tokenization mechanism; our contribution is to apply a fixed spectral preconditioner as an input-side hint channel.
 
 %==============================================================================
 \section{Discussion and Conclusion}
@@ -420,7 +441,7 @@ The Zero and Duplicate conditions serve as capacity controls: they have the same
 \toprule
 \textbf{Method} & \textbf{Content} & \textbf{Mean MASE} & \textbf{Std} & \textbf{Wins/485} \\
 \midrule
-\textbf{\texttt{d4\_dropout}} & Monic Chebyshev $\tilde T_4(B^{16})$ residual & \textbf{0.8368} & 0.0083 & \textbf{329} \\
+\textbf{\texttt{d4\_dropout}} & Monic Chebyshev $\tilde T_4$ residual & \textbf{0.8368} & 0.0083 & \textbf{329} \\
 Zero & All zeros & 0.8578 & 0.0102 & 262 \\
 Baseline & No extra channel & 0.8617 & 0.0062 & --- \\
 Duplicate & Copy of input & 0.8650 & 0.0081 & 217 \\

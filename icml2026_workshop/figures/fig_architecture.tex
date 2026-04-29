@@ -19,7 +19,7 @@
         align=center,
         minimum height=0.58cm,
         inner sep=2.2pt,
-        font=\sffamily\small
+        font=\sffamily\footnotesize
     },
     smallbox/.style={box, minimum width=1.35cm},
     medbox/.style={box, minimum width=1.70cm},
@@ -40,7 +40,7 @@
         text=white,
         minimum size=0.44cm,
         inner sep=0pt,
-        font=\sffamily\bfseries\small
+        font=\sffamily\bfseries\footnotesize
     }
 ]
 
@@ -50,11 +50,11 @@
 \draw[dashed, line width=0.55pt, dash pattern=on 4pt off 4pt]
     (0.20,0.18) rectangle (18.60,9.82);
 
-\node[font=\sffamily\bfseries\large, anchor=west] at (0.48,9.40)
+\node[font=\sffamily\bfseries\normalsize, anchor=west] at (0.48,9.40)
     {Polynomial Input Preconditioning};
 \node[changed, minimum width=0.38cm, minimum height=0.24cm] at (13.15,9.38) {};
-\node[font=\sffamily\small, anchor=west] at (13.48,9.38)
-    {new or widened vs. Moirai-2.0};
+\node[font=\sffamily\footnotesize, anchor=west] at (13.48,9.38)
+    {Modifications vs. Moirai 2.0};
 
 % -----------------------------------------------------------------------------
 % Input and modified input projection
@@ -62,7 +62,7 @@
 \draw[blue!63, line width=1.05pt]
     plot[smooth] coordinates {(0.55,1.10) (0.82,1.48) (1.10,0.96)
         (1.38,1.45) (1.68,1.00) (1.95,1.26)};
-\node[anchor=west, font=\sffamily\small] at (0.55,0.52) {Input Series};
+\node[anchor=west, font=\sffamily\footnotesize] at (0.55,0.52) {Input Series};
 
 \node[smallbox] (patch) at (1.55,2.36) {Patching};
 \node[smallbox] (scale) at (3.62,2.36) {Scaling};
@@ -90,23 +90,23 @@
 % -----------------------------------------------------------------------------
 % Unchanged transformer decoder block
 % -----------------------------------------------------------------------------
-\coordinate (Tsw) at (7.72,3.18);
-\coordinate (Tne) at (12.58,8.42);
+\coordinate (Tsw) at (7.45,3.05);
+\coordinate (Tne) at (12.75,8.90);
 \draw[wire] (Tsw) rectangle (Tne);
-\node[font=\sffamily\small, anchor=east] at (12.40,8.15) {$N{\times}$};
-\node[font=\sffamily\small, anchor=west] at (7.92,8.15)
-    {Moirai-2.0 decoder block};
+\node[font=\sffamily\footnotesize, anchor=east] at (12.50,8.62) {$N{\times}$};
+\node[font=\sffamily\footnotesize, align=right, anchor=east] at (7.20,8.58)
+    {Moirai-2.0\\decoder block};
 
-\node[smallbox] (rms1) at (10.15,3.78) {RMS Norm};
-\node[widebox, minimum width=2.78cm] (attn) at (10.15,4.70)
+\node[smallbox] (rms1) at (10.15,3.62) {RMS Norm};
+\node[widebox, minimum width=3.02cm, minimum height=0.78cm] (attn) at (10.15,4.65)
     {Causal Attention\\RoPE on $Q,K$};
-\node[sum] (add1) at (10.15,5.55) {+};
-\node[smallbox] (rms2) at (10.15,6.30) {RMS Norm};
-\node[widebox, minimum width=2.05cm, minimum height=0.86cm] (ffn) at (10.15,7.12)
-    {FFN\\GLU};
-\node[sum] (add2) at (10.15,7.88) {+};
+\node[sum] (add1) at (10.15,5.72) {+};
+\node[smallbox] (rms2) at (10.15,6.72) {RMS Norm};
+\node[widebox, minimum width=2.05cm, minimum height=0.62cm] (ffn) at (10.15,7.62)
+    {FFN GLU};
+\node[sum] (add2) at (10.15,8.48) {+};
 
-\coordinate (tin) at (10.15,3.18);
+\coordinate (tin) at (10.15,3.05);
 \draw[flow] (inproj.north) -- (tin) -- (rms1.south);
 \draw[flow] (rms1.north) -- (attn.south);
 \draw[flow] (attn.north) -- (add1.south);
@@ -114,16 +114,16 @@
 \draw[flow] (rms2.north) -- (ffn.south);
 \draw[flow] (ffn.north) -- (add2.south);
 
-\draw[wire] (tin) -- (8.22,3.18) -- (8.22,5.55);
-\draw[flow] (8.22,5.55) -- (add1.west);
-\draw[wire] (add1.west) -- (8.42,5.55) -- (8.42,7.88);
-\draw[flow] (8.42,7.88) -- (add2.west);
+\draw[wire] (10.15,3.24) -- (7.86,3.24) -- (7.86,5.72);
+\draw[flow] (7.86,5.72) -- (add1.west);
+\draw[wire] (add1.east) -- (12.30,5.72) -- (12.30,8.48);
+\draw[flow] (12.30,8.48) -- (add2.east);
 
 % -----------------------------------------------------------------------------
 % Unchanged output head and loss
 % -----------------------------------------------------------------------------
-\node[smallbox] (outrms) at (15.12,7.92) {RMS Norm};
-\node[widebox, minimum width=2.02cm] (outproj) at (15.12,7.02)
+\node[smallbox] (outrms) at (14.85,8.05) {RMS Norm};
+\node[widebox, minimum width=2.02cm] (outproj) at (14.85,7.10)
     {Output Proj.\\Residual};
 \node[
     box,
@@ -132,38 +132,38 @@
     minimum width=2.50cm,
     minimum height=0.86cm,
     text width=2.30cm
-] (decode) at (15.12,5.96) {AR Quantile\\Decode (4)};
-\node[smallbox] (descale) at (15.12,4.96) {Descaling};
+] (decode) at (14.85,5.98) {AR Quantile\\Decode (4)};
+\node[smallbox] (descale) at (14.85,4.90) {Descaling};
 
-\draw[flow] (add2.east) -- (13.15,7.88) -- (13.15,8.80) -- (15.12,8.80) -- (outrms.north);
+\draw[flow] (add2.north) -- (10.15,9.16) -- (14.85,9.16) -- (outrms.north);
 \draw[flow] (outrms.south) -- (outproj.north);
 \draw[flow] (outproj.south) -- (decode.north);
 \draw[flow] (decode.south) -- (descale.north);
 
-\draw[flow] (descale.east) -- (16.18,4.96);
+\draw[flow] (descale.east) -- (16.08,4.90);
 \draw[blue!63, line width=1.05pt]
-    plot[smooth] coordinates {(16.15,5.20) (16.36,5.55) (16.64,4.98) (16.90,5.47)};
+    plot[smooth] coordinates {(16.24,5.08) (16.48,5.42) (16.78,4.92) (17.06,5.30)};
 \foreach \dy in {-0.18,-0.04,0.10,0.24} {
     \draw[orange!85!black, line width=1.05pt]
-        plot[smooth] coordinates {(16.90,5.47) (17.08,5.18+\dy)
-            (17.30,5.36+\dy) (17.48,5.78+\dy)};
+        plot[smooth] coordinates {(17.06,5.30) (17.28,5.08+\dy)
+            (17.54,5.26+\dy) (17.78,5.68+\dy)};
 }
-\node[align=left, font=\sffamily\small, anchor=west] at (16.42,4.43)
+\node[align=left, font=\sffamily\footnotesize, anchor=west] at (16.62,4.30)
     {Predicted\\Quantiles};
 
 \draw[green!60!black, line width=1.10pt]
-    plot[smooth] coordinates {(16.25,3.20) (16.45,2.86) (16.74,2.94) (17.05,3.42)};
-\node[align=left, font=\sffamily\small, anchor=west] at (17.22,3.10)
+    plot[smooth] coordinates {(16.46,3.05) (16.69,2.72) (17.01,2.82) (17.31,3.24)};
+\node[align=left, font=\sffamily\footnotesize, anchor=west] at (17.44,2.90)
     {Ground\\Truth};
 \node[
     box,
-    fill=yellow!16,
-    draw=red!70!black,
+    fill=cyan!9,
+    draw=cyan!55!black,
     minimum width=1.48cm,
     text width=1.28cm
-] (loss) at (15.72,3.30) {Quantile\\Loss};
-\draw[<->, line width=0.70pt] (16.42,5.10) -- (16.42,3.48);
-\node[font=\sffamily\normalsize] at (16.05,4.25) {$\mathcal{L}$};
+] (loss) at (14.85,3.36) {Quantile\\Loss};
+\draw[<->, line width=0.70pt] (15.96,4.64) -- (15.96,3.34);
+\node[font=\sffamily\normalsize] at (15.58,3.98) {$\mathcal{L}$};
 
 \end{tikzpicture}
 \end{document}

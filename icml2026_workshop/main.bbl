@@ -73,6 +73,11 @@ Marsden, A. and Hazan, E.
 \newblock Universal sequence preconditioning.
 \newblock \emph{arXiv preprint arXiv:2502.06545}, 2025.
 
+\bibitem[Mason \& Handscomb(2003)Mason and Handscomb]{mason2003chebyshev}
+Mason, J.~C. and Handscomb, D.~C.
+\newblock \emph{Chebyshev Polynomials}.
+\newblock CRC Press, 2003.
+
 \bibitem[Nie et~al.(2023)Nie, Nguyen, Sinthong, and
   Kalagnanam]{nie2023patchtst}
 Nie, Y., Nguyen, N.~H., Sinthong, P., and Kalagnanam, J.
@@ -85,12 +90,6 @@ Nie, Y., Nguyen, N.~H., Sinthong, P., and Kalagnanam, J.
 Oppenheim, A.~V., Schafer, R.~W., and Buck, J.~R.
 \newblock \emph{Discrete-Time Signal Processing}.
 \newblock Prentice Hall, 1999.
-
-\bibitem[Parks \& McClellan(1972)Parks and McClellan]{parks1972chebyshev}
-Parks, T.~W. and McClellan, J.~H.
-\newblock Chebyshev approximation for nonrecursive digital filters with linear
-  phase.
-\newblock \emph{IEEE Transactions on Circuit Theory}, 1972.
 
 \bibitem[Shchur et~al.(2025)Shchur, Turkmen, Ansari, Stella, and
   Rangapuram]{shchur2025fevbench}

@@ -1,9 +1,17 @@
-\begin{thebibliography}{15}
+\begin{thebibliography}{16}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Aksu et~al.(2024)Aksu, Woo, Liu, Liu, Liu, Savarese, Xiong, and
+  Sahoo]{vijay2024gifteval}
+Aksu, T., Woo, G., Liu, J., Liu, X., Liu, C., Savarese, S., Xiong, C., and
+  Sahoo, D.
+\newblock {GIFT-Eval}: A benchmark for general time series forecasting model
+  evaluation.
+\newblock \emph{arXiv preprint arXiv:2410.10393}, 2024.
 
 \bibitem[Ansari et~al.(2024)Ansari, Stella, Turkmen, Zhang, Mercado, Shen,
   Shchur, Rangapuram, Arango, Kapoor, et~al.]{ansari2024chronos}
@@ -53,16 +61,17 @@ Hazan, E., Lee, H., Singh, K., Zhang, C., and Zhang, Y.
 \newblock Spectral filtering for general linear dynamical systems.
 \newblock In \emph{NeurIPS}, 2018.
 
-\bibitem[Liu et~al.(2024)Liu, Woo, Kumar, and Sahoo]{liu2024moirai2}
-Liu, C., Woo, G., Kumar, A., and Sahoo, D.
-\newblock Moirai-moe: Empowering time series foundation models with sparse
-  mixture of experts.
-\newblock \emph{arXiv preprint arXiv:2410.10469}, 2024.
+\bibitem[Liu et~al.(2025)Liu, Aksu, Liu, Liu, Yan, Pham, Savarese, Sahoo,
+  Xiong, and Li]{liu2024moirai2}
+Liu, C., Aksu, T., Liu, J., Liu, X., Yan, H., Pham, Q., Savarese, S., Sahoo,
+  D., Xiong, C., and Li, J.
+\newblock Moirai 2.0: When less is more for time series forecasting.
+\newblock \emph{arXiv preprint arXiv:2511.11698}, 2025.
 
-\bibitem[Marsden \& Hazan(2024)Marsden and Hazan]{marsden2024universal}
+\bibitem[Marsden \& Hazan(2025)Marsden and Hazan]{marsden2024universal}
 Marsden, A. and Hazan, E.
 \newblock Universal sequence preconditioning.
-\newblock \emph{arXiv preprint arXiv:2406.09368}, 2024.
+\newblock \emph{arXiv preprint arXiv:2502.06545}, 2025.
 
 \bibitem[Nie et~al.(2023)Nie, Nguyen, Sinthong, and
   Kalagnanam]{nie2023patchtst}
@@ -83,11 +92,12 @@ Parks, T.~W. and McClellan, J.~H.
   phase.
 \newblock \emph{IEEE Transactions on Circuit Theory}, 1972.
 
-\bibitem[Vijay et~al.(2024)Vijay, Abid, Ansari, et~al.]{vijay2024gifteval}
-Vijay, T., Abid, K., Ansari, A.~F., et~al.
-\newblock {GIFT-Eval}: A benchmark for general time series forecasting model
+\bibitem[Shchur et~al.(2025)Shchur, Turkmen, Ansari, Stella, and
+  Rangapuram]{shchur2025fevbench}
+Shchur, O., Turkmen, C., Ansari, A.~F., Stella, L., and Rangapuram, S.~S.
+\newblock {FEV-Bench}: A unified benchmark for few-shot time series forecasting
   evaluation.
-\newblock \emph{arXiv preprint arXiv:2410.10393}, 2024.
+\newblock \emph{arXiv preprint arXiv:2509.26468}, 2025.
 
 \bibitem[Woo et~al.(2024)Woo, Liu, Kumar, Xiong, Savarese, and
   Sahoo]{woo2024unified}

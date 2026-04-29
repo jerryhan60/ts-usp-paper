@@ -42,7 +42,11 @@ Universal Sequence Preconditioning (USP) is a recent theoretical framework for o
 \section{Introduction}
 %==============================================================================
 
-\paragraph{Universal sequence preconditioning.} \citet{marsden2024universal} proposed Universal Sequence Preconditioning (USP) for online learning of linear dynamical systems. The technique generalises the classical notion of differencing: they suggest preprocessing the observations via a fixed convolution with polynomial coefficients, and prove that this can result in hidden-dimension-free (up to logarithmic factors) sublinear regret with respect to the best LDS predictor. Empirically, USP with fixed Chebyshev or Legendre coefficients reduces prediction error on synthetic linear, nonlinear, and deep-RNN-generated sequences as well as the ETTh1 benchmark.
+\paragraph{Universal sequence preconditioning.} \citet{marsden2024universal} proposed Universal Sequence Preconditioning (USP) for online learning of linear dynamical systems. The technique generalises the classical notion of differencing: they suggest preprocessing the observations via a fixed convolution with polynomial coefficients,
+\[
+\tilde{x}_t \;=\; \sum_{k=0}^{d} c_k\,x_{t-ks},
+\]
+where $c_k$ are fixed coefficients and $s$ is a stride. They prove that this can result in hidden-dimension-free (up to logarithmic factors) sublinear regret with respect to the best LDS predictor. Empirically, USP with fixed Chebyshev or Legendre coefficients reduces prediction error on synthetic linear, nonlinear, and deep-RNN-generated sequences as well as the ETTh1 benchmark.
 
 \paragraph{Does this transfer to zero-shot time-series forecasting?} The setting of pretrained foundation models~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} differs from USP in two important ways. First, the forecaster is trained offline on a large corpus and deployed for zero-shot prediction over a multi-step horizon, rather than making one-step predictions in an online loop where the true observation is revealed after each step; this distinction is critical because directly applying USP's target-side preconditioning to multi-step rollout leads to catastrophic error accumulation (see below). Second, the training data comes from many heterogeneous sources that may not be well-modelled as finite-dimensional LDSs.
 
@@ -68,14 +72,14 @@ where $s$ is a stride parameter set equal to the patch size $P$. Our default is 
 
 \paragraph{Training and inference.} We train from scratch using the Moirai-2 Small architecture \citep{liu2024moirai2} on a publicly available subset of the LOTSA corpus \citep{woo2024unified} (the full official training data is not publicly released). Due to the smaller data budget, we train for $10$K steps with $1$K-step warmup (the official model uses $100$K steps with $10$K warmup). All other settings (optimizer, loss, precision) follow the official protocol. The only architectural modification is the wider input projection; for \texttt{d4\_dropout}, the preconditioning channel is independently zeroed with probability $0.1$ per patch during training and always provided at inference. At inference, the model predicts multiple future patches per step; for longer horizons, predicted patches are appended to the context and the decoder is re-run with the preconditioning residual recomputed over the extended context.
 
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig_architecture.pdf}
+\includegraphics[width=0.98\textwidth]{figures/fig_architecture.pdf}
 \vskip -0.1in
-\caption{Moirai-2.0 architecture: (a) standard patch transformer; (b) with polynomial input preconditioning. Only the per-patch input projection is wider; the transformer decoder is unchanged. Total overhead: $12$K parameters ($0.11\%$).}
+\caption{Polynomial input preconditioning in Moirai-2.0. Orange boxes mark components changed relative to the standard architecture: the Chebyshev residual channel, optional training-time hint dropout, concatenation of $[x,m,r]$, and the widened residual input projection from $2P$ to $3P$ dimensions. The decoder block and autoregressive quantile output head are unchanged. Total overhead: $12$K parameters ($0.11\%$).}
 \label{fig:arch}
 \vskip -0.1in
-\end{figure}
+\end{figure*}
 
 %==============================================================================
 \section{Experiments}
@@ -216,7 +220,7 @@ Transformer-based universal forecasters have proliferated~\citep{woo2024unified,
 \section{Discussion and Conclusion}
 %==============================================================================
 
-Polynomial input preconditioning adapts the ideas behind \citet{marsden2024universal} from online LDS prediction to zero-shot patch-based time-series transformers. Concatenating the preconditioned signal as an auxiliary channel avoids the error accumulation of target-side preconditioning at multi-step horizons, and adds only $0.11\%$ parameters. One limitation is that at Base ($46$M) scale the per-seed gain is inconsistent, suggesting that sufficient attention capacity can absorb the inductive bias that preconditioning provides at smaller scale.
+Polynomial input preconditioning adapts the ideas behind \citet{marsden2024universal} from online LDS prediction to zero-shot patch-based time-series transformers. Concatenating the preconditioned signal as an auxiliary channel avoids the error accumulation of target-side preconditioning at multi-step horizons, and adds only $0.11\%$ parameters.
 
 \paragraph{Impact statement.} This paper advances the field of Machine Learning; we identify no societal consequences requiring specific highlighting.
 

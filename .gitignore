@@ -19,5 +19,3 @@
 *~
 *.swp
 
-# Not tracked: compiled PDFs of the main manuscript (Overleaf builds these)
-main.pdf

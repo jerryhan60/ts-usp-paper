@@ -214,7 +214,7 @@ FUNCTION {field.or.null}
 FUNCTION {emphasize}
 { duplicate$ empty$
     { pop$ "" }
-    { "\emph{" swap$ * "}" * }
+    'skip$
   if$
 }
 
@@ -645,7 +645,7 @@ FUNCTION {format.article.crossref}
           warning$
           ""
         }
-        { "In \emph{" journal * "}" * }
+        { "In " journal * }
       if$
     }
     { "In " }
@@ -671,7 +671,7 @@ FUNCTION {format.book.crossref}
               crossref * warning$
               "" *
             }
-            { "\emph{" * series * "}" * }
+            { series * }
           if$
         }
         'skip$
@@ -692,7 +692,7 @@ FUNCTION {format.incoll.inproc.crossref}
               crossref * warning$
               ""
             }
-            { "In \emph{" booktitle * "}" * }
+            { "In " booktitle * }
           if$
         }
         { "In " }

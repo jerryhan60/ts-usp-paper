@@ -11,6 +11,15 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 
+% Keep caption labels in roman text.
+\captionsetup{
+  skip=0.1in,
+  font=small,
+  labelfont={bf,small},
+  textfont=normalfont,
+  labelsep=period
+}
+
 \icmltitlerunning{Polynomial Input Preconditioning}
 
 \begin{document}
@@ -35,55 +44,56 @@
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-Universal Sequence Preconditioning (USP) is a recent theoretical framework for online sequence prediction that preprocesses observations via a fixed polynomial convolution, yielding hidden-dimension-free sublinear regret for marginally stable linear dynamical systems. This paper investigates whether these techniques transfer empirically to zero-shot patch-based transformer time-series forecasters such as Moirai-2. We propose \textbf{polynomial input preconditioning}, where we concatenate the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. Architecturally, we only widen the per-patch input projection ($12$K extra parameters, $0.11\%$ overhead) while leaving the transformer decoder unchanged. On GIFT-Eval ($97$ configurations, $5$ seeds) our method achieves $\Delta=-2.9\%$ geometric-mean MASE versus the Moirai-2 Small baseline (cross-seed standard deviation $< 1\%$ of MASE), winning $72$ of $97$ per-configuration means ($p < 10^{-5}$, paired sign test). Capacity-matched controls confirm that the polynomial content, not the extra parameters, drives the gain. Surprisingly, fixed Chebyshev coefficients also outperform learned coefficient vectors initialized from either Chebyshev or zero. At $100$K training steps the effect reaches $\Delta=-3.9\%$.
+Universal Sequence Preconditioning (USP) is a recent theoretical framework for online sequence prediction that preprocesses observations via a fixed polynomial convolution, yielding hidden-dimension-free sublinear regret for marginally stable linear dynamical systems. This paper investigates whether these techniques transfer empirically to zero-shot patch-based transformer time-series forecasters such as Moirai 2.0. We propose \textbf{polynomial input preconditioning}, where we concatenate the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. Architecturally, we only widen the per-patch input projection ($12$K extra parameters, $0.11\%$ overhead) while leaving the transformer decoder unchanged. On GIFT-Eval ($97$ configurations, $5$ seeds) our method achieves $\Delta=-2.9\%$ geometric-mean MASE versus the Moirai 2.0 Small baseline (cross-seed standard deviation $< 1\%$ of MASE), winning $72$ of $97$ per-configuration means ($p < 10^{-5}$, paired sign test). Capacity-matched controls confirm that the polynomial content, not the extra parameters, drives the gain. Surprisingly, fixed Chebyshev coefficients also outperform learned coefficient vectors initialized from either Chebyshev or zero. At $100$K training steps the effect reaches $\Delta=-3.9\%$.
 \end{abstract}
 
 %==============================================================================
 \section{Introduction}
 %==============================================================================
 
-\paragraph{Universal sequence preconditioning.} \citet{marsden2024universal} proposed Universal Sequence Preconditioning (USP) for online learning of linear dynamical systems. USP generalizes differencing by applying a fixed polynomial convolution to the observed sequence:
+\paragraph{Universal sequence preconditioning.} \citet{marsden2024universal} recently established provable guarantees for online prediction algorithms on data arising from marginally stable and asymmetric linear dynamical systems. For a linear dynamical system (LDS) with hidden state dynamics $x_{t+1} = Ax_t + Bu_t$, Marsden and Hazan observe that convolving the target sequence with coefficients from a monic polynomial $p(z)$ is, at a high level, equivalent to shrinking the effect of the distant past on the current value of the system by a factor of $p(A)$. Choosing $p$ to be the monic Chebyshev polynomial $\tilde T_d$ of degree $d$ exploits its classical equioscillation property, that no degree-$d$ monic polynomial has smaller $\ell_\infty$ norm than $2^{1-d}$ on $[-1,1]$, suppressing the echoes of the distant past. Combining this technique with online convex regression to learn the recent past of the LDS delivers sublinear, hidden-dimension-independent regret bounds for learning marginally stable asymmetric transition matrices. Empirically, on synthetic linear, nonlinear, and deep-RNN-generated sequences and on the ETTh1 benchmark, USP with fixed Chebyshev or Legendre coefficients reduces prediction error.
+
+\paragraph{Does this transfer to universal time-series forecasting?} The setting of pretrained foundation models~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} differs from the theoretical framework of USP in three important ways: (i)~the forecaster is a patch-based transformer, not an online learner; (ii)~the data-generating process may be far richer than a finite-dimensional LDS; (iii)~the task is multi-step-ahead forecasting, not single-step online. 
+
+\paragraph{Our approach.} Difference (iii) is ostensibly the most prohibitive because in order to invert the preconditioning at time $t$ during inference, we need to have access to ground truth up until time $t-1$, which is not the case in the multi-step-ahead regime. One natural approach, in the spirit of Marsden and Hazan, is to nevertheless precondition the target, train the predictor to emit $\hat{y}_{t}^{pre}$, and invert at inference using our previous predictions to recover $\hat y_{t}$: 
 \[
-\tilde{x}_t \;=\; \sum_{k=0}^{d} c_k\,x_{t-ks},
+\hat y_t \;=\; \hat{y}_t^{pre} \;-\; \sum_{k=1}^{d} c_k\, \hat y_{t-k}
 \]
-where $c_k$ are fixed coefficients, $d$ is the polynomial degree, and $s$ is a stride. They prove that this can result in hidden-dimension-free (up to logarithmic factors) sublinear regret with respect to the best LDS predictor. Empirically, USP with fixed Chebyshev or Legendre coefficients reduces prediction error on synthetic linear, nonlinear, and deep-RNN-generated sequences as well as the ETTh1 benchmark.
 
-\paragraph{Does this transfer to zero-shot time-series forecasting?} The setting of pretrained foundation models~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} differs from USP in two important ways. First, the forecaster is trained offline on a large corpus and deployed for zero-shot prediction over a multi-step horizon, rather than making one-step predictions in an online loop where the true observation is revealed after each step; this distinction is critical because directly applying USP's target-side preconditioning to multi-step rollout leads to catastrophic error accumulation (see below). Second, the training data comes from many heterogeneous sources that may not be well-modelled as finite-dimensional LDSs.
+Empirically, however, we encounter catastrophic error accumulation in this scenario, as an error at time $t+H$ becomes a linear combination of the previous $H$ model errors. Instead, we propose leaving the forecast target unchanged and use a preconditioning channel, where we compute the preconditioned signal $h_t$ and concatenate it as an auxiliary input alongside the raw target and the observation mask. Because the model never operates in preconditioned space at inference, no inversion is needed and we avoid error accumulation. 
 
-\paragraph{Our approach.} If one preconditions the target and trains the model to emit preconditioned forecasts, recovering the original forecast requires a causal recurrence in which each recovered value depends on previously recovered (and therefore noisy) values. Prediction errors compound geometrically across the rollout. Instead, we leave the forecast target unchanged and concatenate the preconditioned signal as an auxiliary input channel alongside the raw target and the observation mask. Because the model never operates in preconditioned space at inference, no inversion is needed and error accumulation is avoided.
-
-A second motivation comes from the architecture itself. Patch-based transformers~\citep{nie2023patchtst,dosovitskiy2021image} split the input into non-overlapping length-$P$ windows and embed each patch independently, creating a cross-patch information bottleneck: before the first self-attention layer, each patch embedding encodes only $P$ time steps, so multi-patch correlations must be discovered entirely through attention. A polynomial preconditioner that mixes information across the same multi-patch scales before patching can inject cross-patch structure into every embedding at negligible parameter cost.
+Another motivation for this approach is that patch-based architectures \citep{nie2023patchtst,dosovitskiy2021image} split the input into non-overlapping length-$P$ windows and embed each patch independently, creating a cross-patch information bottleneck: before the first self-attention layer, each patch embedding encodes only $P$ time steps, so multi-patch correlations must be discovered entirely through attention. A polynomial preconditioner that mixes information across the same multi-patch scales before patching might be helpful. 
 
 %==============================================================================
 \section{Method}
 %==============================================================================
-\paragraph{Preconditioning polynomial.} Given a normalized input series $x$ and the coefficients $c_0, c_1, \ldots, c_d$ of a degree-$d$ monic polynomial (with $c_0 = 1$), USP convolves the observations: $\sum_{k=0}^{d} c_k\, x_{t-ks}$. We strip the identity term ($c_0 x_t$, which the model already sees) and feed only the residual as an auxiliary channel:
+\paragraph{Preconditioning filter.} We apply a degree-$d$ monic polynomial in the lag operator $B$ at stride $s$ to the normalized series $x$ and define the preconditioned input as the residual against the identity:
 \begin{equation}
-r_t \;=\; \sum_{k=1}^{d} c_k\, x_{t - ks},
+\tilde h_t \;=\; \sum_{k=1}^{d} c_k\, x_{t - k s},
 \label{eq:precond}
 \end{equation}
-where $s$ is a stride parameter set equal to the patch size $P$. Our default is the monic Chebyshev polynomial of the first kind, $\tilde T_d$, with $d=4$. For $P=16$ the coefficients are $(c_1,\dots,c_4) = (0,-1,0,\tfrac{1}{8})$, so $r_t = -x_{t-32} + \tfrac{1}{8}\, x_{t-64}$.
+where $\{c_k\}_{k=1}^{d}$ are the residual coefficients after expanding the chosen degree-$d$ monic polynomial in powers of the stride-$s$ lag operator and stripping the identity term $x_t$. Our default is the monic Chebyshev polynomial of the first kind, $\tilde T_d$, with $d=4$ and $s = P$ (one patch). For $P=16$ the coefficients are $(c_1,\dots,c_4) = (0,-1,0,\tfrac{1}{8})$, so $\tilde h_t = -x_{t-32} + \tfrac{1}{8}\, x_{t-64}$.
 
-\paragraph{Preconditioning channel.} The residual $r$ is partitioned into patches $\mathbf{r}_i$ aligned with the data patches $\mathbf{p}_i$. In Moirai-2, each patch passes through a per-patch input projection (a two-layer residual MLP with SiLU activation) that maps the concatenation of the data patch and an observation mask to an embedding vector. We widen this projection to accept a third input, the preconditioning patch: the input dimension grows from $2P$ to $3P$, adding $12$K parameters ($0.11\%$ of Moirai-2 Small). The transformer decoder is unchanged. We refer to this default ($d=4$ Chebyshev, no dropout) as \texttt{d4}, and to the same architecture trained with $10\%$ per-patch channel dropout as \texttt{d4\_dropout}.
+\paragraph{Preconditioning channel.} The preconditioned signal $\tilde h$ is partitioned into patches $\tilde{\mathbf h}_i$ aligned with the data patches. The per-patch input projection widens from $2P$ to $3P$: $\mathbf{e}_i = \text{ResBlock}_{3P \to d}([\mathbf{p}_i; \mathbf{m}_i; \tilde{\mathbf{h}}_i])$, where $\mathbf{p}_i$ is the data patch and $\mathbf{m}_i$ the observation mask. Only this first linear layer widens (adding $12$K parameters, $0.11\%$ of Moirai 2.0 Small); the transformer decoder is unchanged. We refer to this default ($d=4$ Chebyshev preconditioning, no dropout) as \texttt{d4}, and to the same architecture trained with $10\%$ per-patch channel dropout as \texttt{d4\_dropout}.
 
-\paragraph{Training and inference.} We train from scratch using the Moirai-2 Small architecture \citep{liu2024moirai2} on a publicly available subset of the LOTSA corpus \citep{woo2024unified} (the full official training data is not publicly released). Due to the smaller data budget, we train for $10$K steps with $1$K-step warmup (the official model uses $100$K steps with $10$K warmup). All other settings (optimizer, loss, precision) follow the official protocol. The only architectural modification is the wider input projection; for \texttt{d4\_dropout}, the preconditioning channel is independently zeroed with probability $0.1$ per patch during training and always provided at inference. At inference, the model predicts multiple future patches per step; for longer horizons, predicted patches are appended to the context and the decoder is re-run with the preconditioning residual recomputed over the extended context.
+\paragraph{Training and inference.} We otherwise reproduce the architecture, training, and inference protocol of Moirai 2.0 Small \citep{liu2024moirai2}: identical model size, optimizer, loss, data pipeline, and autoregressive multi-step decoding. The only modification is the wider input projection and, for \texttt{d4\_dropout}, the per-patch channel dropout (each patch's preconditioning vector independently zeroed with probability $0.1$ during training; always provided at inference). The preconditioning channel is computed once on the normalized series, in the same way at both train and inference time. At inference, lag values that fall in the context window are real observations; lag values that fall in the prediction window are zero before the model has emitted anything there, and the model's own predictions thereafter (since Moirai 2.0 forecasts a prediction-length window in chunks and re-runs the encoder per chunk).
 
-\begin{figure*}[t]
+\begin{figure}[t]
 \centering
-\includegraphics[width=0.98\textwidth]{figures/fig_architecture.pdf}
+\includegraphics[width=\columnwidth]{figures/fig_architecture.pdf}
 \vskip -0.1in
-\caption{Polynomial input preconditioning in Moirai-2.0. Orange boxes mark components changed relative to the standard architecture: the Chebyshev residual channel, optional training-time hint dropout, concatenation of $[x,m,r]$, and the widened residual input projection from $2P$ to $3P$ dimensions. The decoder block and autoregressive quantile output head are unchanged. Total overhead: $12$K parameters ($0.11\%$).}
+\caption{Moirai 2.0 architecture: (a) standard patch transformer; (b) with polynomial input preconditioning. Only the per-patch input projection is wider; the transformer decoder is unchanged. Total overhead: $12$K parameters ($0.11\%$).}
 \label{fig:arch}
 \vskip -0.1in
-\end{figure*}
+\end{figure}
 
 %==============================================================================
 \section{Experiments}
 %==============================================================================
 
-\paragraph{Setup.} We train Moirai-2 Small \citep{liu2024moirai2} (11.4M params, 6-layer transformer, $P{=}16$) from scratch on the LOTSA corpus \citep{woo2024unified} for 10K steps (batch 256, AdamW, cosine LR $10^{-3}$, 1K warmup, bf16). Our Baseline is a best-effort from-scratch retrain of Moirai-2 Small under this protocol; the official Moirai~2.0-R-Small release used Salesforce's full, undisclosed training compute, so our retrain does not (and cannot) reproduce its absolute leaderboard numbers. All conditions share identical data, optimiser, seeds, and compute, so the effects we report are controlled relative improvements. Evaluation uses GIFT-Eval \citep{vijay2024gifteval} (97 dataset$\times$horizon configs) at context length 4{,}000 and the independent FEV-Bench \citep{shchur2025fevbench} (100 tasks). We report normalized MASE following the GIFT-Eval leaderboard convention: each configuration's MASE is divided by the seasonal naive baseline's MASE, then aggregated via geometric mean. We run 5 seeds (0, 1, 2, 7, 42) and report cross-seed mean and standard deviation. See Appendix~\ref{app:methodology} for full details.
+\paragraph{Setup.} We train Moirai 2.0 Small \citep{liu2024moirai2} (11.4M params, 6-layer transformer, $P{=}16$) from scratch on the LOTSA corpus \citep{woo2024unified} for 10K steps (batch 256, AdamW, cosine LR $10^{-3}$, 1K warmup, bf16). Our Baseline is a best-effort from-scratch retrain of Moirai 2.0 Small under this protocol; the official Moirai~2.0-R-Small release used Salesforce's full, undisclosed training compute, so our retrain does not (and cannot) reproduce its absolute leaderboard numbers. All conditions share identical data, optimiser, seeds, and compute, so the effects we report are controlled relative improvements. Evaluation uses GIFT-Eval \citep{vijay2024gifteval} (97 dataset$\times$horizon configs), a broad zero-shot forecasting suite spanning domains, frequencies, and prediction horizons, at context length 4{,}000; we also evaluate on the independent FEV-Bench \citep{shchur2025fevbench}, a few-shot forecasting benchmark with 100 held-out tasks and scaled quantile-loss metrics. We report normalized MASE following the GIFT-Eval leaderboard convention: each configuration's MASE is divided by the seasonal naive baseline's MASE, then aggregated via geometric mean. We run 5 seeds (0, 1, 2, 7, 42) and report cross-seed mean and standard deviation. See Appendix~\ref{app:methodology} for full details.
 
-\paragraph{Conditions.} We compare four conditions, all sharing the same training data, optimizer, and seeds. \textbf{Baseline} is unmodified Moirai-2 (no preconditioning channel). \textbf{\texttt{d4}} and \textbf{\texttt{d4\_dropout}} add the polynomial preconditioning channel of \S2 (without and with $10\%$ per-patch channel dropout). \textbf{Zero} and \textbf{Duplicate} are capacity-matched controls: they share \texttt{d4\_dropout}'s widened input projection and $12$K extra parameters, but feed the third channel either all zeros (Zero) or a copy of the data channel (Duplicate). They isolate whether any gain comes from the polynomial content or merely from the extra capacity.
+\paragraph{Conditions.} We compare four conditions, all sharing the same training data, optimizer, and seeds. \textbf{Baseline} is unmodified Moirai 2.0 (no preconditioning channel). \textbf{\texttt{d4}} and \textbf{\texttt{d4\_dropout}} add the polynomial preconditioning channel of \S2 (without and with $10\%$ per-patch channel dropout). \textbf{Zero} and \textbf{Duplicate} are capacity-matched controls: they share \texttt{d4\_dropout}'s widened input projection and $12$K extra parameters, but feed the third channel either all zeros (Zero) or a copy of the data channel (Duplicate). They isolate whether any gain comes from the polynomial content or merely from the extra capacity.
 
 \subsection{Main Results}
 
@@ -199,13 +209,11 @@ Zero (cap.\ ctrl)      & $0.8937$        & $+1.73\%$         & $0.036$ \\
 \vskip -0.1in
 \end{figure}
 
-At 100K optimizer steps (Table~\ref{tab:100k}, 5 seeds) the relative MASE reduction reaches $-3.9\%$ while both capacity controls now actively hurt (Duplicate $+0.9\%$, Zero $+1.7\%$); \texttt{d4\_dropout} also shows much lower cross-seed variance ($\sigma = 0.009$ vs $0.019$ for BL).
+At 100K optimizer steps (Table~\ref{tab:100k}, 5 seeds) the relative MASE reduction reaches $-3.9\%$ while both capacity controls now actively hurt (Duplicate $+0.9\%$, Zero $+1.7\%$); \texttt{d4\_dropout} also shows lower cross-seed variance ($\sigma = 0.009$ vs $0.019$ for BL).
 
-\paragraph{Training dynamics.} The training-loss curves in Fig.~\ref{fig:trainloss} separate early and remain ordered throughout the run, with the gap widening after roughly 20K steps. This is consistent with the 100K evaluation: the preconditioning channel is not merely a short-horizon optimization aid, but continues to improve the learned predictor as training proceeds. Appendix~\ref{app:trainloss} shows that the evaluation improvement is larger than the training-loss reduction, suggesting that the fixed polynomial channel also acts as a useful inductive bias.
+\paragraph{Training dynamics.} The training-loss curves in Fig.~\ref{fig:trainloss} separate early and remain ordered, with the gap widening after roughly 20K steps. Appendix~\ref{app:trainloss} shows that the evaluation improvement is larger than the training-loss reduction, suggesting that the fixed polynomial channel also acts as a useful inductive bias.
 
-\paragraph{Domain, frequency, and context.} The domain and frequency analyses pool all $5$ seeds ($485$ seed$\times$config observations). The benefit concentrates in high-resolution domains whose natural periodicities match the polynomial's $32/64$-step lookback: Demographics ($-9.8\%$), Transport ($-6.9\%$), Energy ($-4.0\%$); Weather ($-0.3\%$) and Healthcare ($-0.2\%$) are essentially unchanged (Appendix~\ref{app:domain}). The context-length sweep is seed 0 only; there the benefit is approximately constant ($\sim -5\%$) across context lengths $512$--$4{,}000$, and \texttt{d4\_dropout} at context $2{,}000$ outperforms the baseline at context $4{,}000$ (Appendix~\ref{app:context}).
-
-\paragraph{Horizon stratification.} On short horizons (PL $\leq 60$) \texttt{d4} and \texttt{d4\_dropout} are within $0.4\%$ of each other (Table~\ref{tab:horizon-main}; full analysis in Appendix~\ref{app:horizon}); on medium and long horizons (PL $\geq 480$) \texttt{d4\_dropout} beats \texttt{d4} by $0.7$--$0.85\%$ relative MASE---the direction the dropout-as-mismatch-regulariser story predicts but small relative to the $\sim 4\%$ HD-vs-Baseline gap.
+\paragraph{Domain, frequency, context, and horizon.} Domain and frequency analyses pool all $5$ seeds; the context sweep is seed 0 only. Gains concentrate in high-resolution domains whose periodicities match the $32/64$-step lookback: Demographics ($-9.8\%$), Transport ($-6.9\%$), and Energy ($-4.0\%$), while Weather and Healthcare are essentially unchanged (Appendix~\ref{app:domain}). The benefit is approximately constant across contexts $512$--$4{,}000$, and on medium/long horizons \texttt{d4\_dropout} beats \texttt{d4} by $0.7$--$0.85\%$ relative MASE (Appendices~\ref{app:context}, \ref{app:horizon}).
 
 \begin{table}[t]
 \caption{Horizon stratification of \texttt{d4} vs \texttt{d4\_dropout} vs Baseline. 5-seed cross-config geomean MASE; $\Delta\%$ relative to BL within each bin.}
@@ -232,18 +240,16 @@ long   & 21 & 0.924 & 0.880 ($-4.7\%$) & \textbf{0.874 ($-5.3\%$)} \\
 %==============================================================================
 
 \paragraph{Time-series foundation models.}
-Transformer-based universal forecasters have proliferated~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex}, trained on large, heterogeneous corpora for zero-shot forecasting across unseen domains. Recent work questions whether current TSFMs meaningfully exceed simple classical baselines in the zero-shot regime~\citep{zhang2025tsfmready}---a critique that motivates exactly our regime of interest: strengthening compact foundation models at low parameter cost. Most architectural innovation in this space (rotary position embeddings, attention variants, mixture-of-experts~\citep{liu2024moirai2}) targets the transformer stack; input preconditioning is orthogonal, acting on the input representation before any attention layer.
+Transformer-based universal forecasters~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} are trained on heterogeneous corpora for zero-shot forecasting across unseen domains. Recent work questions whether current TSFMs meaningfully exceed classical baselines in the zero-shot regime~\citep{zhang2025tsfmready}, motivating low-cost improvements to compact models. Most architectural innovation targets the transformer stack; input preconditioning is orthogonal, acting before attention.
 
 \paragraph{Spectral methods and patching.}
-\citet{hazan2017learning,hazan2018spectral} developed spectral-filtering algorithms for online LDS prediction with hidden-dimension-free guarantees; \citet{marsden2024universal} unify this line via polynomial preconditioning. Classical polynomial approximation with Chebyshev polynomials has a long tradition~\citep{mason2003chebyshev,oppenheim1999discrete}. These works are the closest conceptual antecedents, while the patch-level bottleneck in modern TSFMs~\citep{nie2023patchtst,dosovitskiy2021image,woo2024unified,liu2024moirai2} explains why the signal is useful architecturally. We do not claim a new attention or tokenization mechanism; our contribution is to apply a fixed spectral preconditioner as an input-side hint channel.
+\citet{hazan2017learning,hazan2018spectral} developed spectral-filtering algorithms for online LDS prediction; \citet{marsden2024universal} unify this line via polynomial preconditioning. Classical polynomial approximation with Chebyshev polynomials has a long tradition~\citep{mason2003chebyshev,oppenheim1999discrete}. These works are the closest conceptual antecedents, while the patch-level bottleneck in modern TSFMs~\citep{nie2023patchtst,dosovitskiy2021image,woo2024unified,liu2024moirai2} explains why the signal is useful architecturally.
 
 %==============================================================================
 \section{Discussion and Conclusion}
 %==============================================================================
 
-Polynomial input preconditioning adapts the ideas behind \citet{marsden2024universal} from online LDS prediction to zero-shot patch-based time-series transformers. Concatenating the preconditioned signal as an auxiliary channel avoids the error accumulation of target-side preconditioning at multi-step horizons, and adds only $0.11\%$ parameters.
-
-\paragraph{Impact statement.} This paper advances the field of Machine Learning; we identify no societal consequences requiring specific highlighting.
+Polynomial input preconditioning adapts the ideas behind \citet{marsden2024universal} from online LDS prediction to zero-shot patch-based time-series transformers. Concatenating the preconditioned signal as an auxiliary channel avoids target-side inversion, adds only $0.11\%$ parameters, and yields controlled gains that persist against capacity controls and learned-coefficient baselines.
 
 \bibliographystyle{icml2026}
 \bibliography{references}
@@ -268,9 +274,9 @@ All experiments use identical training infrastructure on NVIDIA H100/A100 GPUs. 
 \toprule
 \textbf{Parameter} & \textbf{Value} \\
 \midrule
-Architecture & Moirai-2 Small (6 layers, $d=384$, $d_{\text{ff}}=1024$, $P=16$) \\
+Architecture & Moirai 2.0 Small (6 layers, $d=384$, $d_{\text{ff}}=1024$, $P=16$) \\
 Total parameters & 11.4M (baseline), 11.4M + 12K (\texttt{d4\_dropout}) \\
-Training data & LOTSA v1, Moirai-2 config (weighted, variate-proportional) \\
+Training data & LOTSA v1, Moirai 2.0 config (weighted, variate-proportional) \\
 Steps (10K runs) & 100 epochs $\times$ 100 batches = 10,000 steps \\
 Steps (100K runs) & 1,000 epochs $\times$ 100 batches = 100,000 steps \\
 Batch size & 256 \\
@@ -298,9 +304,9 @@ All evaluations use the GIFT-Eval benchmark \citep{vijay2024gifteval} with 97 da
 
 \subsection{Preconditioning Channel Implementation}
 
-The monic Chebyshev polynomial $\tilde T_d(z)$ is expanded in the monomial basis to obtain the coefficients $c_0, \ldots, c_d$ with $c_0=1$. The preconditioning residual for time step $t$ is:
+The monic Chebyshev polynomial $\tilde T_d(z)$ is expanded in the monomial basis to obtain the coefficients $c_0, \ldots, c_d$ with $c_0=1$. We use subscript notation for time indices throughout. The preconditioning residual for time step $t$ is:
 \[
-r_t = \left(\sum_{k=0}^{d} c_k \, x_{t-ks}\right) - x_t
+r_t = \sum_{k=1}^{d} c_k \, x_{t-ks}.
 \]
 This is computed over the full (normalized, zero-mean unit-variance) time series before patching. Unobserved time steps are masked to zero. During training with channel dropout $p$, each patch's preconditioning channel independently has probability $p$ of being replaced with zeros. At inference, the full preconditioning channel is always provided.
 
@@ -315,7 +321,7 @@ where $n_h = 1$ for single-scale (\texttt{d4\_dropout}) and $n_h = 2$ for multi-
 \end{align}
 Only $W_1$ and $W_3$ are wider than the baseline. $W_2$ and all downstream layers are identical.
 
-\paragraph{TransformerDecoder.} Moirai-2 Small uses a 6-layer decoder-only transformer with $d_{\mathrm{model}} = 384$, $d_{\mathrm{ff}} = 1024$, 6 attention heads, causal multi-head self-attention with rotary position embeddings (RoPE), SwiGLU feed-forward blocks, and RMSNorm. The output projection is another ResBlock mapping $\mathbb{R}^d \to \mathbb{R}^{K \times |\mathcal{Q}| \times P}$ where $K{=}4$ is the multi-token horizon and $|\mathcal{Q}|{=}9$ the number of quantile levels.
+\paragraph{TransformerDecoder.} Moirai 2.0 Small uses a 6-layer decoder-only transformer with $d_{\mathrm{model}} = 384$, $d_{\mathrm{ff}} = 1024$, 6 attention heads, causal multi-head self-attention with rotary position embeddings (RoPE), SwiGLU feed-forward blocks, and RMSNorm. The output projection is another ResBlock mapping $\mathbb{R}^d \to \mathbb{R}^{K \times |\mathcal{Q}| \times P}$ where $K{=}4$ is the multi-token horizon and $|\mathcal{Q}|{=}9$ the number of quantile levels.
 
 %==============================================================================
 \section{Per-Seed Results}
@@ -532,12 +538,12 @@ Duplicate & 0.8583 & $-0.96\%$ & 42/97 & 27/97 \\
 \end{tabular}
 \end{table}
 
-The empirical ordering directly matches the $L^\infty$-norm prediction: the basis that minimises $\sup_{[-1,1]} |p|$ wins. The explicit residuals for $d=4$ are:
+The empirical ordering directly matches the $L^\infty$-norm prediction: the basis with the smallest monic-polynomial sup-norm wins. The explicit residuals for $d=4$ are:
 \begin{itemize}
     \item \textbf{Monic Chebyshev} ($\tilde T_4(z) = z^4 - z^2 + 1/8$): $r_t = -x_{t-2P} + \tfrac{1}{8} x_{t-4P}$. Sup-norm $= 1/8 = 0.125$, the minimax-optimal value.
     \item \textbf{Monic Legendre} ($\tilde P_4(z) = z^4 - \tfrac{6}{7}z^2 + \tfrac{3}{35}$): $r_t = -\tfrac{6}{7} x_{t-2P} + \tfrac{3}{35} x_{t-4P}$. Same sparsity pattern but sup-norm $= 8/35 \approx 0.229$, a $1.83\times$ gap vs Chebyshev.
     \item \textbf{EMA} (low-pass): geometrically decaying weights $a_k \propto \alpha^k$, truncated to $d=4$ terms. Not polynomial-based; no minimax guarantee.
-    \item \textbf{Finite difference} (high-pass): $p(z) = (z-1)^4$, giving $r_t = -4 x_{t-P} + 6 x_{t-2P} - 4 x_{t-3P} + x_{t-4P}$. Sup-norm $= 2^4 = 16$, amplifying rather than compressing spectral content.
+    \item \textbf{Finite difference} (high-pass): the degree-4 finite-difference polynomial is $(z-1)^4$, giving $r_t = -4 x_{t-P} + 6 x_{t-2P} - 4 x_{t-3P} + x_{t-4P}$. Sup-norm $= 2^4 = 16$, amplifying rather than compressing spectral content.
 \end{itemize}
 The Chebyshev--Legendre gap of $\sim 1.7$ percentage points is consistent with the $1.83\times$ theoretical sup-norm ratio. All polynomial bases except finite differences beat Baseline, confirming that cross-patch information injection is the load-bearing mechanism; the specific coefficients determine how much benefit is extracted.
 

@@ -17,7 +17,16 @@ plt.rcParams.update(
 )
 
 
-def plot_degree_sweep(path_base, degrees, means, stds, baseline, baseline_std, ylabel):
+def plot_degree_sweep(
+    path_base,
+    degrees,
+    means,
+    stds,
+    baseline,
+    baseline_std,
+    ylabel,
+    highlight_best=True,
+):
     degrees = np.asarray(degrees)
     means = np.asarray(means)
     stds = np.asarray(stds)
@@ -45,17 +54,18 @@ def plot_degree_sweep(path_base, degrees, means, stds, baseline, baseline_std, y
         linewidth=1.25,
         label="Chebyshev",
     )
-    best = int(np.argmin(means))
-    ax.scatter(
-        [degrees[best]],
-        [means[best]],
-        s=52,
-        color="#d07a00",
-        edgecolor="white",
-        linewidth=0.8,
-        zorder=4,
-        label="Best",
-    )
+    if highlight_best:
+        best = int(np.argmin(means))
+        ax.scatter(
+            [degrees[best]],
+            [means[best]],
+            s=52,
+            color="#d07a00",
+            edgecolor="white",
+            linewidth=0.8,
+            zorder=4,
+            label="Best",
+        )
     ax.set_xlabel("Polynomial degree", labelpad=2)
     ax.set_ylabel(ylabel, labelpad=2)
     ax.set_xticks(degrees)
@@ -63,7 +73,7 @@ def plot_degree_sweep(path_base, degrees, means, stds, baseline, baseline_std, y
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     handles, labels = ax.get_legend_handles_labels()
-    order = [0, 2, 1]
+    order = [0, 2, 1] if highlight_best else [0, 1]
     ax.legend(
         [handles[i] for i in order],
         [labels[i] for i in order],
@@ -98,4 +108,5 @@ plot_degree_sweep(
     baseline=1.2908,
     baseline_std=0.0,
     ylabel="Geometric mean MASE",
+    highlight_best=False,
 )

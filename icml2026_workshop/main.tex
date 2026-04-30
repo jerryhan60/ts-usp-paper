@@ -36,7 +36,7 @@
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-Universal Sequence Preconditioning (USP) is a recent theoretical framework for online sequence prediction that preprocesses observations via a fixed polynomial convolution, yielding hidden-dimension-free sublinear regret for marginally stable linear dynamical systems. This paper investigates whether these techniques transfer empirically to zero-shot patch-based transformer time-series forecasters such as Moirai 2.0. We propose \textbf{polynomial input preconditioning}, where we concatenate the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. By only adding $0.11\%$ parameters, our method improves a Moirai 2.0 Small baseline by $2.9\%$ geometric-mean MASE on GIFT-Eval and achieves similar gains on FEV-Bench. The improvement grows to $3.9\%$ at a 100K-step training budget. Capacity-matched zero and duplicate-channel controls show that the gain comes from the polynomial content rather than extra parameters. These results suggest that time-series foundation models can benefit substantially from theory-guided structure injected before tokenization, offering a lightweight alternative to improving model performance without scaling model size or attention complexity.
+Universal Sequence Preconditioning (USP) is a recent theoretical framework for online sequence prediction that preprocesses observations via a fixed polynomial convolution, yielding hidden-dimension-free sublinear regret for marginally stable linear dynamical systems. This paper investigates whether these techniques transfer empirically to zero-shot patch-based transformer time-series forecasters such as Moirai 2.0. We propose \textbf{polynomial input preconditioning}, where we concatenate the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. By only adding $0.11\%$ parameters, our method improves a Moirai 2.0 Small baseline by $2.9\%$ geometric-mean MASE on GIFT-Eval and achieves similar gains on FEV-Bench. The improvement grows to $3.9\%$ at a 100K-step training budget. Polynomial input preconditioning performs better with longer prediction horizon lengths, attaining a $5.3\%$ improvement on long horizon prediction tasks. Capacity-matched zero and duplicate-channel controls show that the gain comes from the polynomial content rather than extra parameters. These results suggest that time-series foundation models can benefit substantially from theory-guided structure injected before tokenization, offering a lightweight alternative to improving model performance without scaling model size or attention complexity.
 
 \end{abstract}
 
@@ -53,7 +53,10 @@ where $c_k$ are fixed coefficients and $d$ is the polynomial degree. They prove 
 \paragraph{Does this transfer to zero-shot time-series forecasting?} We investigate how the USP framework can be applied to pretrained time series foundation models, and specifically to the Moirai 2.0 model. The setting of pretrained time series foundation models~\citep{woo2024unified,liu2024moirai2,das2024decoder,ansari2024chronos,goswami2024moment,auer2025tirex} differs from USP in two important ways. First, the forecaster is trained offline on a large corpus and deployed for zero-shot prediction over a multi-step horizon, rather than making one-step predictions in an online loop where the true observation is revealed after each step. Second, the training data comes from many heterogeneous sources that may not be well-modelled as finite-dimensional LDSs.
 
 \paragraph{Our approach.}
-If one preconditions the target and trains the model to emit preconditioned forecasts, recovering the original forecast requires a causal recurrence in which each recovered value depends on previously recovered (and therefore noisy) values. Prediction errors compound geometrically across the rollout. To address this we can leave the forecast target unchanged and concatenate the preconditioned signal as an auxiliary input channel alongside the raw target and the observation mask. Because the model never operates in preconditioned space at inference, no inversion is needed and error accumulation is avoided.
+A direct way to use USP would be to train the forecaster to predict the preconditioned target sequence and
+then invert the preconditioning filter to recover forecasts in the original scale. For multi-step
+forecasting, this inversion may lead to error accumulation as each recovered future value depends on earlier recovered
+values, so forecast errors are fed back into later predictions. To address this we can leave the forecast target unchanged and concatenate the preconditioned signal as an auxiliary input channel alongside the raw target and the observation mask. Because the model never operates in preconditioned space at inference, no inversion is needed and error accumulation is avoided.
 
 A second motivation comes from the architecture of Moirai 2.0 itself. Patch-based transformers~\citep{nie2023patchtst,dosovitskiy2021image} split the input into non-overlapping length-$P$ windows and embed each patch independently, creating a cross-patch information bottleneck: before the first self-attention layer, each patch embedding encodes only $P$ time steps, so multi-patch correlations must be discovered entirely through attention. A polynomial preconditioner that mixes information across the same multi-patch scales before patching can inject cross-patch structure into every embedding at negligible parameter cost.
 
@@ -126,7 +129,7 @@ Both \texttt{d4} and \texttt{d4\_dropout} improve over Baseline on every seed (T
 On the independent FEV-Bench (Table~\ref{tab:fev-main}), \texttt{d4\_dropout} improves over Baseline by similar margins as on GIFT-Eval, confirming the benefit is not benchmark-specific.
 
 \begin{table}[t]
-\caption{FEV-Bench: \texttt{d4\_dropout} (5-seed mean) vs single-seed Baseline. SQL is FEV-Bench's scaled quantile loss. Cross-seed std for ours is $\le 0.6\%$ of the metric mean.}
+\caption{FEV-Bench: \texttt{d4\_dropout} (5-seed mean) vs single-seed Baseline. SQL (scaled quantile loss) is FEV-Bench's primary metric. MASE values here are unnormalized (unlike the normalized MASE in Table~\ref{tab:main}).}
 \label{tab:fev-main}
 \vskip 0.05in
 \centering
@@ -307,7 +310,7 @@ All evaluations use the GIFT-Eval benchmark \citep{vijay2024gifteval} with 97 da
 
 \subsection{Preconditioning Channel Implementation}
 
-The monic Chebyshev polynomial $\tilde T_d(z)=z^d+c_1 z^{d-1}+\cdots+c_d$ is expanded in the monomial basis to obtain the coefficients returned by \texttt{compute\_polynomial\_coefficients}. The preconditioning residual for time step $t$ is:
+The monic Chebyshev polynomial $\tilde T_d(z)=z^d+c_1 z^{d-1}+\cdots+c_d$ is expanded in the monomial basis to obtain the coefficients used by the preconditioning filter. The preconditioning residual for time step $t$ is:
 \[
 r_t = \left(x_t + \sum_{k=1}^{d} c_k \, x_{t-ks}\right) - x_t
 \]
@@ -333,40 +336,40 @@ Only $W_1$ and $W_3$ are wider than the baseline. $W_2$ and all downstream layer
 
 \begin{table}[H]
 \centering
-\caption{\texttt{d4\_dropout} vs.\ Baseline: per-seed pairwise comparison (10K steps, $\eta = 10^{-3}$).}
+\caption{\texttt{d4} and \texttt{d4\_dropout} vs.\ Baseline: per-seed pairwise comparison (10K steps, $\eta = 10^{-3}$).}
 \small
-\begin{tabular}{ccccc}
+\begin{tabular}{cccccc}
 \toprule
-\textbf{Seed} & \textbf{BL MASE} & \textbf{\texttt{d4\_dropout} MASE} & \textbf{$\Delta$\%} & \textbf{Wins/97} \\
+\textbf{Seed} & \textbf{BL} & \textbf{\texttt{d4}} & \textbf{\texttt{d4\_dropout}} & \textbf{\texttt{d4} $\Delta$\%} & \textbf{\texttt{d4\_drop} $\Delta$\%} \\
 \midrule
-0 & 0.8666 & 0.8234 & $-4.99\%$ & 66 \\
-1 & 0.8503 & 0.8465 & $-0.44\%$ & 54 \\
-2 & 0.8630 & 0.8391 & $-2.77\%$ & 70 \\
-7 & 0.8676 & 0.8320 & $-4.11\%$ & 78 \\
-42 & 0.8614 & 0.8430 & $-2.13\%$ & 61 \\
+0 & 0.8666 & 0.8327 & 0.8234 & $-3.91\%$ & $-4.99\%$ \\
+1 & 0.8503 & 0.8435 & 0.8465 & $-0.80\%$ & $-0.44\%$ \\
+2 & 0.8630 & 0.8283 & 0.8391 & $-4.02\%$ & $-2.77\%$ \\
+7 & 0.8676 & 0.8422 & 0.8320 & $-2.93\%$ & $-4.11\%$ \\
+42 & 0.8614 & 0.8425 & 0.8430 & $-2.19\%$ & $-2.13\%$ \\
 \midrule
-\textbf{Mean} & \textbf{0.8617} & \textbf{0.8368} & \textbf{$-2.89\%$} & \textbf{329/485} \\
+\textbf{Mean} & \textbf{0.8617} & \textbf{0.8379} & \textbf{0.8368} & \textbf{$-2.77\%$} & \textbf{$-2.89\%$} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Per-seed MASE for all four conditions:
+Per-seed MASE for all conditions:
 
 \begin{table}[H]
 \centering
-\caption{Per-seed results. \texttt{d4\_dropout} achieves lower MASE than all controls on every seed.}
+\caption{Per-seed results. Both \texttt{d4} and \texttt{d4\_dropout} improve over Baseline and controls on every seed.}
 \small
-\begin{tabular}{ccccc}
+\begin{tabular}{cccccc}
 \toprule
-\textbf{Seed} & \textbf{Baseline} & \textbf{\texttt{d4\_dropout} (Ours)} & \textbf{Zero} & \textbf{Duplicate} \\
+\textbf{Seed} & \textbf{Baseline} & \textbf{\texttt{d4} (Ours)} & \textbf{\texttt{d4\_dropout} (Ours)} & \textbf{Zero} & \textbf{Duplicate} \\
 \midrule
-0 & 0.8666 & \textbf{0.8234} & 0.8586 & 0.8777 \\
-1 & 0.8503 & \textbf{0.8465} & 0.8738 & 0.8546 \\
-2 & 0.8630 & \textbf{0.8391} & 0.8425 & 0.8662 \\
-7 & 0.8676 & \textbf{0.8320} & 0.8573 & 0.8602 \\
-42 & 0.8614 & \textbf{0.8430} & 0.8569 & 0.8661 \\
+0 & 0.8666 & 0.8327 & \textbf{0.8234} & 0.8586 & 0.8777 \\
+1 & 0.8503 & \textbf{0.8435} & 0.8465 & 0.8738 & 0.8546 \\
+2 & 0.8630 & \textbf{0.8283} & 0.8391 & 0.8425 & 0.8662 \\
+7 & 0.8676 & 0.8422 & \textbf{0.8320} & 0.8573 & 0.8602 \\
+42 & 0.8614 & 0.8425 & \textbf{0.8430} & 0.8569 & 0.8661 \\
 \midrule
-\textbf{Mean} & 0.8617 & \textbf{0.8368} & 0.8578 & 0.8650 \\
+\textbf{Mean} & 0.8617 & 0.8379 & \textbf{0.8368} & 0.8578 & 0.8650 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -385,6 +388,7 @@ Per-seed MASE for all four conditions:
 \textbf{Method} & \textbf{s0} & \textbf{s1} & \textbf{s2} & \textbf{s7} & \textbf{s42} & \textbf{Mean} & \textbf{Std} & \textbf{Eval MASE} \\
 \midrule
 Baseline & .1366 & .1365 & .1358 & .1366 & .1365 & .1364 & .0003 & 0.8617 \\
+\texttt{d4} (ours) & .1356 & .1348 & .1354 & .1353 & .1341 & .1350 & .0006 & 0.8379 \\
 \textbf{\texttt{d4\_dropout} (ours)} & .1354 & .1350 & .1350 & .1353 & .1343 & \textbf{.1350} & .0004 & \textbf{0.8368} \\
 Zero & .1378 & .1369 & .1363 & .1366 & .1353 & .1366 & .0008 & 0.8578 \\
 Duplicate & .1376 & .1366 & .1370 & .1365 & .1355 & .1366 & .0007 & 0.8650 \\
@@ -412,32 +416,6 @@ Duplicate & .1192 & .1193 & .1185 & .1197 & .1182 & .1190 & .0006 & 0.8860 \\
 \end{tabular}
 \end{table}
 
-%==============================================================================
-\section{Capacity Controls}
-\label{app:capacity}
-%==============================================================================
-
-The Zero and Duplicate conditions serve as capacity controls: they have the same architecture and parameter count as \texttt{d4\_dropout}, differing only in the content of the extra channel.
-
-\subsection{5-Seed Results at 10K Steps}
-
-\begin{table}[H]
-\centering
-\caption{Capacity control experiments (5 seeds, $\eta = 10^{-3}$, 10K steps). Same architecture width, different channel content. MASE and standard deviation are computed across seeds; wins are counted after averaging each configuration across the 5 seeds.}
-\small
-\begin{tabular}{lcccc}
-\toprule
-\textbf{Method} & \textbf{Content} & \textbf{Mean MASE} & \textbf{Std} & \textbf{Wins/97} \\
-\midrule
-\textbf{\texttt{d4\_dropout}} & Monic Chebyshev $\tilde T_4$ residual & \textbf{0.8368} & \textbf{0.0083} & \textbf{72/97} \\
-Zero & All zeros & 0.8578 & 0.0099 & 54/97 \\
-Baseline & No extra channel & 0.8617 & 0.0062 & --- \\
-Duplicate & Copy of input & 0.8650 & 0.0077 & 39/97 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-%==============================================================================
 \section{Ablations}
 \label{app:ablations}
 %==============================================================================
@@ -510,7 +488,7 @@ Duplicate & 0.8583 & $-0.96\%$ & 42/97 & 27/97 \\
 \end{tabular}
 \end{table}
 
-Chebyshev is best in this seed-0 sweep, while EMA is also competitive and finite differences are weakest. We therefore treat the basis choice empirically rather than claiming the ordering is fully explained by a single norm argument.
+Chebyshev is best in this seed-0 sweep, while EMA is also competitive and finite differences are weakest.
 
 \subsection{Channel Dropout Rate (Chebyshev $d=4$, $s=16$)}
 
@@ -551,7 +529,7 @@ Fixed Chebyshev & $[0, -1, 0, 0.125]$ (not learned) & 0.8234 & $-4.99\%$ \\
 \end{tabular}
 \end{table}
 
-The two learned solutions converge to distinct basins. Both beat the baseline but are worse than fixed Chebyshev, even though the learned model class contains the fixed Chebyshev solution. This makes the fixed polynomial choice a genuine inductive bias rather than merely a good initialization (51/97 head-to-head wins for fixed).
+The two learned solutions converge to distinct basins. Both beat the baseline but are worse than fixed Chebyshev, even though the learned model class contains the fixed Chebyshev solution. This makes the fixed polynomial choice a genuine inductive bias rather than merely a good initialization.
 
 %==============================================================================
 \section{Horizon Analysis: \texttt{d4} vs \texttt{d4\_dropout}}
@@ -620,77 +598,6 @@ Zero & 0.8917 & 0.8585 & 0.8750 & 0.8825 & 0.9610 & 0.8937 \\
 
 Two findings stand out. First, the benefit of polynomial preconditioning grows with training budget: \texttt{d4\_dropout}'s relative MASE reduction is $-3.9\%$ at 100K (vs.\ $-2.9\%$ at 10K). Second, the capacity controls that were near-neutral at 10K now actively hurt: Duplicate degrades by 0.9\% and Zero by 1.7\%. The baseline shows higher variance across seeds at 100K (seed 0 reaches 0.9092 due to late-training instability), while \texttt{d4\_dropout} remains stable (range 0.83--0.86).
 
-%==============================================================================
-\section{Inference-Time Ablation}
-\label{app:inference}
-%==============================================================================
-
-A model trained with Chebyshev preconditioning (\texttt{d4\_dropout}) is evaluated with different channel content at inference time:
-
-\begin{table}[H]
-\centering
-\caption{Inference-time content ablation (seed 0, \texttt{d4\_dropout} model). The ordering confirms the model has learned to exploit specific polynomial structure.}
-\small
-\begin{tabular}{lcc}
-\toprule
-\textbf{Inference channel content} & \textbf{MASE} & \textbf{vs Normal} \\
-\midrule
-Normal (Chebyshev) & 0.8234 & --- \\
-No preconditioning channel (Baseline arch) & 0.8666 & $+5.2\%$ \\
-Zeros & 0.9003 & $+9.3\%$ \\
-Random Gaussian noise & 0.9427 & $+14.5\%$ \\
-Duplicate (copy of input) & 1.0699 & $+29.9\%$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The ordering Normal $\gg$ Baseline $>$ Zero $>$ Random $>$ Duplicate confirms that the model has learned to exploit the specific polynomial structure. Random and duplicate channels are worse than no preconditioning at all, demonstrating that the model does not simply use the extra channel for generic capacity.
-
-\paragraph{Zeroed-channel dependence vs dropout rate.} Models trained with different channel dropout rates, evaluated with preconditioning replaced by zeros:
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{cccc}
-\toprule
-\textbf{Train dropout} & \textbf{Normal MASE} & \textbf{Zeroed-channel MASE} & \textbf{Degradation} \\
-\midrule
-2\% & 0.8388 & 0.8996 & $+7.2\%$ \\
-10\% (\texttt{d4\_dropout}) & 0.8234 & 0.9003 & $+9.3\%$ \\
-30\% & 0.8559 & 0.8769 & $+2.5\%$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-With 10\% dropout, zeroing the channel at inference causes a moderate degradation (9\%), confirming that the model uses the polynomial signal without becoming wholly dependent on it. With 30\%, the model barely uses preconditioning (2.5\% degradation but weaker overall).
-
-%==============================================================================
-\section{Comparison to Official Moirai 2.0}
-\label{app:official}
-%==============================================================================
-
-Our retrained baseline differs from the official Moirai 2.0-R-Small release because the full official training data are not publicly available:
-
-\begin{table}[H]
-\centering
-\caption{Comparison to official Moirai 2.0-R-Small (HuggingFace release). The official model uses substantially more training data than the public LOTSA setup used in our controlled experiments.}
-\small
-\begin{tabular}{lcc}
-\toprule
-\textbf{Model} & \textbf{Geo Mean MASE} & \textbf{Training} \\
-\midrule
-Official Moirai 2.0-R-Small (HF) & 0.7280 & 100K steps, 295B observations \\
-Our BL (5-seed mean, 10K) & 0.8617 & 10K steps, 27B observations \\
-Our \texttt{d4\_dropout} (5-seed mean, 10K) & 0.8368 & 10K steps, 27B observations \\
-Our BL (5-seed mean, 100K) & 0.8784 & 100K steps, 27B observations \\
-Our \texttt{d4\_dropout} (5-seed mean, 100K) & 0.8443 & 100K steps, 27B observations \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The gap between our retrained models and the official release is expected and does not diminish the controlled comparison. The official model was trained on 295B observations, while our experiments use 27B public LOTSA observations because the full official training corpus is not released. All ablations share the same public data, settings, and seeds, so the relevant claim is the relative improvement from input preconditioning.
-
-%==============================================================================
 \section{FEV-Bench Evaluation}
 \label{app:fevbench}
 %==============================================================================
@@ -699,7 +606,7 @@ To verify that our findings generalize beyond GIFT-Eval, we evaluate on FEV-Benc
 
 \begin{table}[H]
 \centering
-\caption{FEV-Bench headline. \texttt{d4\_dropout} ($d{=}4$) is the 5-seed mean; baseline is single-seed. SQL is FEV-Bench's scaled quantile loss.}
+\caption{FEV-Bench headline. \texttt{d4\_dropout} ($d{=}4$) is the 5-seed mean; baseline is single-seed. SQL (scaled quantile loss) is FEV-Bench's primary metric. MASE values are unnormalized (unlike normalized MASE in the GIFT-Eval tables).}
 \small
 \begin{tabular}{lcccc}
 \toprule
@@ -732,7 +639,7 @@ Baseline (1 seed) & $1.2908$ & $1.0562$ & --- \\
 \midrule
 2 & $1.2780 \pm 0.0039$ & $-0.99\%$ & $1.0425 \pm 0.0032$ \\
 3 & $1.2609 \pm 0.0173$ & $-2.32\%$ & $1.0288 \pm 0.0125$ \\
-\textbf{4} & $\mathbf{1.2532 \pm 0.0064}$ & $\mathbf{-2.92\%}$ & $\mathbf{1.0236 \pm 0.0053}$ \\
+4 & $1.2532 \pm 0.0064$ & $-2.92\%$ & $1.0236 \pm 0.0053$ \\
 5 & $1.2639 \pm 0.0069$ & $-2.08\%$ & $1.0309 \pm 0.0063$ \\
 6 & $1.2521 \pm 0.0068$ & $-3.00\%$ & $1.0236 \pm 0.0060$ \\
 7 & $1.2564 \pm 0.0114$ & $-2.66\%$ & $1.0263 \pm 0.0094$ \\

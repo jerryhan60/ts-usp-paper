@@ -36,7 +36,7 @@
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-Universal Sequence Preconditioning (USP) is a recent theoretical framework for online sequence prediction that preprocesses observations via a fixed polynomial convolution, yielding hidden-dimension-free sublinear regret for marginally stable linear dynamical systems. This paper investigates whether these techniques transfer empirically to zero-shot patch-based transformer time-series forecasters such as Moirai 2.0. We propose \textbf{polynomial input preconditioning}, where we concatenate the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. By only adding $0.11\%$ parameters, our method improves a Moirai 2.0 Small baseline by $2.9\%$ geometric-mean MASE on GIFT-Eval and achieves similar gains on FEV-Bench. The improvement grows to $3.9\%$ at a 100K-step training budget. Polynomial input preconditioning performs better with longer prediction horizon lengths, attaining a $5.3\%$ improvement on long horizon prediction tasks. Capacity-matched zero and duplicate-channel controls show that the gain comes from the polynomial content rather than extra parameters. These results suggest that time-series foundation models can benefit substantially from theory-guided structure injected before tokenization, offering a lightweight alternative to improving model performance without scaling model size or attention complexity.
+Universal Sequence Preconditioning (USP) is a recent theoretical framework for online sequence prediction that preprocesses observations via a fixed polynomial convolution, yielding hidden-dimension-free sublinear regret for marginally stable linear dynamical systems. This paper investigates whether these techniques transfer empirically to zero-shot patch-based transformer time-series forecasters such as Moirai 2.0. We propose \textbf{polynomial input preconditioning}, where we concatenate the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. By only adding $0.11\%$ parameters, our method improves a Moirai 2.0 Small baseline by $2.9\%$ geometric-mean MASE on GIFT-Eval and achieves similar gains on FEV-Bench. At a 100K-step budget, the method remains substantially better than the matched baseline, with a larger relative gap and lower cross-seed variance. Polynomial input preconditioning performs better with longer prediction horizon lengths, attaining a $5.3\%$ improvement on long horizon prediction tasks. Capacity-matched zero and duplicate-channel controls show that the gain comes from the polynomial content rather than extra parameters. These results suggest that time-series foundation models can benefit substantially from theory-guided structure injected before tokenization, offering a lightweight alternative to improving model performance without scaling model size or attention complexity.
 
 \end{abstract}
 
@@ -126,22 +126,22 @@ Duplicate ctrl             & 0.865          & $+0.4\%$       & 39/97 & 0.07 \\
 
 Both \texttt{d4} and \texttt{d4\_dropout} improve over Baseline on every seed (Table~\ref{tab:main}). The average improvements across seeds are $2.8\%$ and $2.9\%$ respectively. Their average MASE values are within $0.1\%$ of each other, so the bulk of the gain comes from the polynomial content rather than the dropout. Zero and Duplicate share \texttt{d4\_dropout}'s architecture and $12$K-parameter overhead. Duplicate hurts ($39/97$ wins) and Zero has no significant effect ($54/97$, $p = 0.31$). This demonstrates the importance of the polynomial content of the filter rather than just the additional capacity.
 
-On the independent FEV-Bench (Table~\ref{tab:fev-main}), \texttt{d4\_dropout} improves over Baseline by similar margins as on GIFT-Eval, confirming the benefit is not benchmark-specific.
+On the independent FEV-Bench (Table~\ref{tab:fev-main}, 5 seeds each), \texttt{d4\_dropout} wins on $78/100$ tasks with $\Delta = -2.2\%$ MASE ($p < 10^{-7}$), confirming the benefit is not benchmark-specific.
 
 \begin{table}[t]
-\caption{FEV-Bench: \texttt{d4\_dropout} (5-seed mean) vs single-seed Baseline. SQL (scaled quantile loss) is FEV-Bench's primary metric. MASE values here are unnormalized (unlike the normalized MASE in Table~\ref{tab:main}).}
+\caption{FEV-Bench (5 seeds each). SQL (scaled quantile loss) is FEV-Bench's primary metric. MASE values are unnormalized (unlike the normalized MASE in Table~\ref{tab:main}). Wins: per-task mean MASE of \texttt{d4\_dropout} $<$ Baseline (out of 100); $p$ from paired sign test.}
 \label{tab:fev-main}
 \vskip 0.05in
 \centering
 \setlength{\tabcolsep}{4pt}
 \begin{small}
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Method} & \textbf{MASE} & \textbf{SQL} & \textbf{Wins} \\
+\textbf{Method} & \textbf{MASE} & \textbf{SQL} & \textbf{Wins} & \textbf{$p$} \\
 \midrule
-\textbf{\texttt{d4\_dropout}} \textbf{(Ours)} & \textbf{1.2532} & \textbf{1.0236} & \textbf{72/100} \\
-Baseline                                      & $1.2908$        & $1.0562$        & --- \\
-$\Delta\%$ vs BL                              & $-2.91\%$       & $-3.09\%$       &  \\
+\textbf{\texttt{d4\_dropout} (Ours)} & \textbf{1.254} & \textbf{1.024} & \textbf{78/100} & $< 10^{-7}$ \\
+Baseline                             & $1.282$        & $1.045$        & ---             & --- \\
+$\Delta\%$                           & $-2.2\%$       & $-2.0\%$       &                 &  \\
 \bottomrule
 \end{tabular}
 \end{small}
@@ -248,7 +248,7 @@ long   & 21 & 0.924 & 0.880 ($-4.7\%$) & \textbf{0.874 ($-5.3\%$)} \\
 %==============================================================================
 \section{Discussion and Conclusion}
 %==============================================================================
-In this paper, we adapt the ideas presented in \citet{marsden2024universal} to zero-shot patch-based time-series transformers. Concatenating the preconditioned signal as an auxiliary channel avoids the error accumulation of target-side preconditioning at multi-step horizons, and adds only $0.11\%$ parameters, while providing a significant $2.9\%$ improvement on GIFT-Eval. The improvement grows with longer training steps ($3.9\%$ at 100K steps), and at longer horizon lengths.
+In this paper, we adapt the ideas presented in \citet{marsden2024universal} to zero-shot patch-based time-series transformers. Concatenating the preconditioned signal as an auxiliary channel avoids the error accumulation of target-side preconditioning at multi-step horizons, and adds only $0.11\%$ parameters, while providing a significant $2.9\%$ improvement on GIFT-Eval. At a 100K-step budget, the method remains substantially better than the matched baseline, with a larger relative gap and lower cross-seed variance. The improvement is also largest at longer horizon lengths.
 
 More broadly, these results suggest that time-series foundation models can still benefit substantially from simple, theory-guided input transformations. A fixed polynomial channel derived from USP theory improves zero-shot forecasting across benchmarks without significantly increasing parameter count or changing the transformer stack. This points to a practical path for making compact forecasters more accurate and parameter-efficient by injecting structure before tokenization, rather than relying only on larger models or heavier attention mechanisms.
 
@@ -596,7 +596,7 @@ Zero & 0.8917 & 0.8585 & 0.8750 & 0.8825 & 0.9610 & 0.8937 \\
 \end{tabular}
 \end{table}
 
-Two findings stand out. First, the benefit of polynomial preconditioning grows with training budget: \texttt{d4\_dropout}'s relative MASE reduction is $-3.9\%$ at 100K (vs.\ $-2.9\%$ at 10K). Second, the capacity controls that were near-neutral at 10K now actively hurt: Duplicate degrades by 0.9\% and Zero by 1.7\%. The baseline shows higher variance across seeds at 100K (seed 0 reaches 0.9092 due to late-training instability), while \texttt{d4\_dropout} remains stable (range 0.83--0.86).
+Two findings stand out. First, at a 100K-step budget, \texttt{d4\_dropout} remains substantially better than the matched baseline, with a larger relative MASE gap ($-3.9\%$ vs.\ $-2.9\%$ at 10K) and lower cross-seed variance. Second, the capacity controls that were near-neutral at 10K now actively hurt: Duplicate degrades by 0.9\% and Zero by 1.7\%. The baseline shows higher variance across seeds at 100K (seed 0 reaches 0.9092 due to late-training instability), while \texttt{d4\_dropout} remains stable (range 0.83--0.86).
 
 \section{FEV-Bench Evaluation}
 \label{app:fevbench}
@@ -606,32 +606,31 @@ To verify that our findings generalize beyond GIFT-Eval, we evaluate on FEV-Benc
 
 \begin{table}[H]
 \centering
-\caption{FEV-Bench headline. \texttt{d4\_dropout} ($d{=}4$) is the 5-seed mean; baseline is single-seed. SQL (scaled quantile loss) is FEV-Bench's primary metric. MASE values are unnormalized (unlike normalized MASE in the GIFT-Eval tables).}
+\caption{FEV-Bench headline (5 seeds each). MASE values are unnormalized. Wins: per-task mean comparisons out of 100.}
 \small
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Method} & \textbf{Geo Mean MASE} & \textbf{SQL} & \textbf{Wins/100} \\
+\textbf{Method} & \textbf{MASE} & \textbf{SQL} & \textbf{Wins/100} \\
 \midrule
-\textbf{\texttt{d4\_dropout} (Ours, 5 seeds)} & \textbf{1.2532} & \textbf{1.0236} & \textbf{72/100}$^\dagger$ \\
-Baseline (1 seed) & $1.2908$ & $1.0562$ & --- \\
+\textbf{\texttt{d4\_dropout} (Ours)} & \textbf{1.254} & \textbf{1.024} & \textbf{78/100} \\
+Baseline & $1.282$ & $1.045$ & --- \\
+$\Delta\%$ & $-2.2\%$ & $-2.0\%$ & $p < 10^{-7}$ \\
 \bottomrule
 \end{tabular}
-\\[2pt]
-{\footnotesize $^\dagger$Win count from single-seed \texttt{d4\_dropout} vs single-seed BL; the 5-seed mean MASE matches the single-seed value to within rounding.}
 \end{table}
 
-\texttt{d4\_dropout} achieves $\Delta=-2.91\%$ geometric-mean MASE on FEV-Bench (5-seed mean $1.2532 \pm 0.0064$ vs.\ BL $1.2908$) and $\Delta=-3.09\%$ SQL ($1.0236 \pm 0.0053$ vs.\ $1.0562$), consistent with the GIFT-Eval improvement and confirming the benefit is not benchmark-specific.
+\texttt{d4\_dropout} achieves $\Delta=-2.2\%$ geometric-mean MASE on FEV-Bench (5-seed mean $1.254 \pm 0.006$ vs.\ BL $1.282 \pm 0.007$) and $\Delta=-2.0\%$ SQL ($1.024 \pm 0.005$ vs.\ $1.045 \pm 0.004$). The improvement wins on $78/100$ tasks ($p < 10^{-7}$, paired sign test), consistent with the GIFT-Eval results.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\columnwidth]{figures/fev_degsweep.pdf}
-\caption{FEV-Bench polynomial-degree sweep (5 seeds per $d$, stride $s{=}16$, $10\%$ channel dropout). Errorbars are cross-seed std; dashed line is the single-seed baseline. Every tested $d \geq 2$ beats baseline, mirroring the GIFT-Eval pattern (Fig.~\ref{fig:degree-sweep}).}
+\caption{FEV-Bench polynomial-degree sweep (5 seeds per $d$, stride $s{=}16$, $10\%$ channel dropout). Errorbars are cross-seed std; dashed line is the 5-seed baseline mean. Every tested $d \geq 2$ beats baseline, mirroring the GIFT-Eval pattern (Fig.~\ref{fig:degree-sweep}).}
 \label{fig:fev-degree-sweep}
 \end{figure}
 
 \begin{table}[H]
 \centering
-\caption{FEV-Bench polynomial-degree sweep, 5 seeds per degree. $\Delta\%$ relative to the single-seed baseline ($1.2908$).}
+\caption{FEV-Bench polynomial-degree sweep, 5 seeds per degree. $\Delta\%$ relative to the 5-seed baseline mean ($1.282$).}
 \small
 \begin{tabular}{cccc}
 \toprule

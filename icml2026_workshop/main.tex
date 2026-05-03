@@ -73,7 +73,7 @@ r_t &= x_t^{\mathrm{pre}} - x_t
 \end{equation}
 where $s$ is a stride parameter set equal to the patch size $P$. Our default is the monic Chebyshev polynomial of the first kind, $\tilde T_d$, with $d=4$. For $P=16$ the coefficients are $(c_1,\dots,c_4) = (0,-1,0,\tfrac{1}{8})$, so $r_t = -x_{t-32} + \tfrac{1}{8}\, x_{t-64}$.
 
-\paragraph{Preconditioning channel.} The residual $r$ is partitioned into patches $\mathbf{r}_i$ aligned with the data patches $\mathbf{p}_i$. In Moirai 2.0, each patch passes through a per-patch input projection (a two-layer residual MLP with SiLU activation) that maps the concatenation of the data patch and an observation mask to an embedding vector. We widen this projection to accept a third input, the preconditioning patch, and so the input dimension grows from $2P$ to $3P$, adding $12$K parameters ($0.11\%$ of Moirai 2.0 Small). The transformer decoder is unchanged. We refer to this default ($d=4$ Chebyshev, no dropout) as \texttt{d4}, and to the same architecture trained with $10\%$ per-patch channel dropout as \texttt{d4\_dropout}.
+\paragraph{Preconditioning channel.} The residual $r$ is partitioned into patches $\mathbf{r}_i$ aligned with the data patches $\mathbf{p}_i$. In Moirai 2.0, each patch passes through a per-patch input projection (a two-layer residual MLP with SiLU activation) that maps the concatenation of the data patch and an observation mask to an embedding vector. We widen this projection to accept a third input, the preconditioning patch, and so the input dimension grows from $2P$ to $3P$, adding $12$K parameters ($0.11\%$ of Moirai 2.0 Small). The transformer decoder is unchanged. We refer to this default ($d=4$ Chebyshev, no dropout) as \texttt{d4}, and to the same architecture trained with $10\%$ per-patch channel dropout as \texttt{d4\_dropout}. The $z$-score normalization that precedes the residual computation uses only observed context values; prediction-window positions are excluded, so no future information leaks into $r_t$.
 
 \begin{figure*}[t]
 \centering
@@ -162,7 +162,7 @@ $\Delta\%$                           & $-2.2\%$       & $-2.0\%$       &        
 We perform a sweep over the Chebyshev polynomial degree $d$ from $d=2$ to $d=7$, over 5 seeds each (Figure~\ref{fig:degree-sweep}). Every tested degree improves over the baseline, and $d=4$ gives the lowest mean MASE. The curve is shallow enough that we use $d=4$ as a strong default rather than treating the degree as a sharply tuned hyperparameter.
 
 \begin{table}[t]
-\caption{Learned coefficients vs Chebyshev coefficients (seed 0, 10K steps).}
+\caption{Fixed vs learned coefficients (5 seeds, 10K steps).}
 \label{tab:learned-coeff-main}
 \vskip 0.05in
 \centering
@@ -170,18 +170,18 @@ We perform a sweep over the Chebyshev polynomial degree $d$ from $d=2$ to $d=7$,
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{Setting} & \textbf{Coefficients $(c_1,\ldots,c_4)$} & \textbf{MASE} & \textbf{$\Delta$\%} \\
+\textbf{Setting} & \textbf{MASE} & \textbf{Std} & \textbf{$\Delta$\%} \\
 \midrule
-\textbf{Fixed Cheb.} & $\mathbf{[0,-1,0,0.125]}$ & \textbf{0.8234} & $\mathbf{-4.99\%}$ \\
-Learned, Cheb. init & $[-0.026,-1.032,-0.123,0.007]$ & 0.8332 & $-3.85\%$ \\
-Learned, zero init & $[0.308,0.177,0.057,0.045]$ & 0.8358 & $-3.57\%$ \\
+\textbf{Fixed Chebyshev} & \textbf{0.837} & $0.008$ & $\mathbf{-2.9\%}$ \\
+Learned, zero init & $0.839$ & $0.006$ & $-2.7\%$ \\
+Learned, Cheb. init & $0.844$ & $0.007$ & $-2.1\%$ \\
 \bottomrule
 \end{tabular}
 \end{scriptsize}
 \vskip -0.1in
 \end{table}
 
-We also consider directly learning the preconditioning coefficients (Table~\ref{tab:learned-coeff-main}). In one setting, we initialize the preconditioning coefficients to the Chebyshev coefficients, and we note that the coefficients remain relatively close to the original initialization. In another setting, we initialize the preconditioning coefficients to zero, and the filter converges to a positive smoothly decaying lag. We note that the fixed Chebyshev coefficients still perform the best in evaluation, suggesting a valuable inductive bias provided by the polynomial content.
+We also consider directly learning the preconditioning coefficients (Table~\ref{tab:learned-coeff-main}). When initialized from the Chebyshev values, the learned coefficients stay close to the initialization across all seeds (c$_2 \approx -1.03$) but consistently drift at other lags. When initialized from zero, the coefficients converge to a smoothly decaying pattern whose sign varies by seed but whose magnitude is consistent ($|c_1| \approx 0.31$, $|c_2| \approx 0.18$). Both learned variants beat Baseline, but fixed Chebyshev still performs best, suggesting a genuine inductive bias.
 
 We also compare Chebyshev coefficients with coefficients obtained from Legendre polynomials, EMA, and finite differences and find that Chebyshev performs the best (Appendix~\ref{app:ablations}). We also perform other stride and dropout ablations.
 
@@ -301,7 +301,7 @@ Seeds & 0, 1, 2, 7, 42 (5 seeds for main results) \\
 All evaluations use the GIFT-Eval benchmark \citep{vijay2024gifteval} with 97 dataset$\times$horizon configurations:
 \begin{itemize}
     \item Context length: 4,000 tokens (maximum supported)
-    \item Patch size: 32 for most frequencies, 8 for quarterly (following Moirai conventions)
+    \item Patch size: $P = 16$ (fixed in Moirai 2.0; the variable patch sizes $P \in \{8, 32\}$ apply to Moirai 1.x only)
     \item Batch size: 64
     \item Metric: Normalized MASE (each configuration's MASE divided by the seasonal naive baseline's MASE)
     \item Aggregation: geometric mean across 97 configurations
@@ -512,24 +512,38 @@ Chebyshev is best in this seed-0 sweep, while EMA is also competitive and finite
 {\footnotesize $^\dagger$\texttt{d4} MASE is the 5-seed mean. \texttt{d4} and \texttt{d4\_dropout} are essentially tied; dropout helps marginally.}
 \end{table}
 
-\subsection{Learned Coefficients (seed 0)}
+\subsection{Learned Coefficients (5 seeds)}
 
 \begin{table}[H]
 \centering
-\caption{Learned coefficient ablation (seed 0, 10K steps).}
+\caption{Learned coefficient ablation (5 seeds, 10K steps). Per-seed learned coefficients and MASE.}
 \small
-\begin{tabular}{lccc}
+\begin{tabular}{clcc}
 \toprule
-\textbf{Initialization} & \textbf{Learned coefficients} & \textbf{MASE} & \textbf{$\Delta$\% vs BL} \\
+\textbf{Seed} & \textbf{Learned $(c_1, c_2, c_3, c_4)$} & \textbf{MASE} & \textbf{$\Delta$\%} \\
 \midrule
-Chebyshev init & $[-0.026, -1.032, -0.123, 0.007]$ & 0.8332 & $-3.85\%$ \\
-Zero init & $[0.308, 0.177, 0.057, 0.045]$ & 0.8358 & $-3.57\%$ \\
-Fixed Chebyshev & $[0, -1, 0, 0.125]$ (not learned) & 0.8234 & $-4.99\%$ \\
+\multicolumn{4}{c}{\textbf{Chebyshev init} (mean MASE = 0.844)} \\
+\midrule
+0 & $[-0.026, -1.032, -0.123, +0.007]$ & 0.833 & $-3.9\%$ \\
+1 & $[+0.010, -1.034, -0.134, -0.000]$ & 0.843 & $-0.8\%$ \\
+2 & $[-0.016, -1.027, -0.152, -0.011]$ & 0.856 & $-4.0\%$ \\
+7 & $[+0.002, -1.028, -0.141, +0.020]$ & 0.842 & $-2.9\%$ \\
+42 & $[-0.032, -1.030, -0.148, -0.015]$ & 0.846 & $-2.2\%$ \\
+\midrule
+\multicolumn{4}{c}{\textbf{Zero init} (mean MASE = 0.839)} \\
+\midrule
+0 & $[+0.308, +0.177, +0.057, +0.045]$ & 0.836 & $-3.6\%$ \\
+1 & $[-0.286, -0.188, -0.054, -0.044]$ & 0.847 & $-0.4\%$ \\
+2 & $[-0.323, -0.190, -0.058, -0.066]$ & 0.830 & $-4.0\%$ \\
+7 & $[-0.303, -0.168, -0.057, -0.048]$ & 0.839 & $-3.3\%$ \\
+42 & $[-0.331, -0.163, -0.028, -0.057]$ & 0.842 & $-2.2\%$ \\
+\midrule
+\multicolumn{4}{c}{\textbf{Fixed Chebyshev} (mean MASE = 0.837, not learned)} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The two learned solutions converge to distinct basins. Both beat the baseline but are worse than fixed Chebyshev, even though the learned model class contains the fixed Chebyshev solution. This makes the fixed polynomial choice a genuine inductive bias rather than merely a good initialization.
+All three settings beat Baseline, but fixed Chebyshev (0.837) is best. The Chebyshev-init solution consistently keeps $c_2 \approx -1.03$ (the dominant 2-patch lookback) but drifts at other lags, particularly adding $c_3 \approx -0.14$ (a 3-patch term absent from the fixed polynomial). The zero-init solution converges to a smoothly decaying pattern whose sign is seed-dependent ($4/5$ seeds find negative coefficients, $1/5$ finds positive) but whose magnitude is consistent ($|c_1| \approx 0.31$, $|c_2| \approx 0.18$). Despite having strictly more capacity, neither learned variant matches fixed Chebyshev, confirming that the Chebyshev structure provides regularization value.
 
 %==============================================================================
 \section{Horizon Analysis: \texttt{d4} vs \texttt{d4\_dropout}}

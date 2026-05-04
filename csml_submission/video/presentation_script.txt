@@ -1,0 +1,26 @@
+Slide 1: Title
+This presentation describes polynomial input preconditioning for zero-shot time-series forecasting.
+
+Slide 2: USP Preliminaries
+The key preliminary is Universal Sequence Preconditioning, proposed by Marsden and Hazan for online prediction in marginally stable linear dynamical systems. Their insight is that instead of asking a learner to infer a potentially large hidden state directly, one can first transform the observed sequence with a fixed polynomial convolution. Chebyshev-style coefficients are useful because they uniformly damp the difficult modes of the hidden dynamics across a broad spectral range. The intuition for this project is to use that same fixed, theory-guided signal as information given to a patch-based transformer before tokenization.
+
+Slide 3: Problem
+The starting point is a common design in modern time-series foundation models like Moirai 2.0. These models split the input sequence into fixed-length patches, embed each patch independently, and then run a transformer over the resulting tokens. This is efficient, but it creates a bottleneck: before attention, each token only sees its own local patch. If important structure spans multiple patches, the transformer has to discover that structure later.
+
+Slide 4: Method
+My idea is to expose a small amount of cross-patch information before tokenization. I use a fixed polynomial convolution motivated by Universal Sequence Preconditioning. In the default setting, the residual channel is r sub t equals negative x sub t minus thirty two, plus one eighth times x sub t minus sixty four. This is computed from the normalized input series, split into patches, and concatenated alongside the raw input patch and observation mask. The only architectural change is that the first projection layer gets wider, from two patch channels to three. The transformer decoder, output head, and forecast target are unchanged. The overhead is only twelve thousand parameters, or about zero point one one percent of Moirai 2.0 Small.
+
+Slide 5: Architecture
+This diagram shows the full architectural change. The orange boxes are the new parts: compute the Chebyshev residual, optionally apply hint dropout during training, concatenate the raw input, mask, and residual, and widen the input projection. Everything inside the Moirai 2.0 decoder block and the autoregressive quantile output head stays the same.
+
+Slide 6: Main Result
+The main result is on GIFT-Eval, which has ninety-seven dataset-by-horizon forecasting configurations. Across five seeds, the preconditioned model improves geometric-mean normalized MASE by two point nine percent over the Moirai 2.0 Small baseline. After averaging each configuration across seeds, it wins seventy-two of ninety-seven configurations, with a paired sign-test p-value below ten to the minus five. The important control is capacity matching. I trained the same widened architecture with a zero third channel and with a duplicate of the input as the third channel. Those controls do not reproduce the gain, so the improvement comes from the polynomial content of the channel.
+
+Slide 7: Ablations and External Validation
+I also tested whether the result transfers beyond GIFT-Eval. On FEV-Bench, an independent benchmark with one hundred forecasting tasks, the same method improves MASE by two point nine percent and scaled quantile loss by three point one percent. In ablations, every tested Chebyshev degree from two through seven improves over baseline. Fixed Chebyshev coefficients also outperform learned coefficient vectors initialized either from Chebyshev coefficients or from zero.
+
+Slide 8: Training Dynamics
+Finally, the effect grows with training. At one hundred thousand steps, the MASE improvement reaches three point nine percent, and the preconditioned model has lower cross-seed variance than the baseline. The gains are also largest on longer-horizon forecasting tasks, where the dropout version is more robust during autoregressive decoding.
+
+Slide 9: Takeaways
+The takeaway is that foundation-model performance does not only come from scaling model size. A small, fixed, theory-guided transformation placed before tokenization can improve zero-shot forecasting while leaving the transformer itself almost completely unchanged. For time series models, this suggests a practical path toward more accurate and parameter-efficient forecasters.

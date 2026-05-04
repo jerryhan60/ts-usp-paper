@@ -1,225 +1,263 @@
-% CSML Poster — 36" x 24" landscape
+% CSML Independent Work Poster -- 36" x 24" landscape
 % Compile: pdflatex poster.tex
-\documentclass[11pt]{article}
+\documentclass[10pt]{article}
 
-\usepackage[paperwidth=36in, paperheight=24in, margin=0.4in, landscape=false]{geometry}
+\usepackage{fix-cm}
+\usepackage[paperwidth=36in,paperheight=24in,margin=0.42in]{geometry}
 \usepackage{xcolor}
-\usepackage{amsmath, amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{amsmath,amssymb}
 \usepackage{multicol}
 \usepackage{microtype}
 \usepackage{enumitem}
 \usepackage{hyperref}
-\hypersetup{colorlinks=true, linkcolor=black, urlcolor=blue!40!black, citecolor=black}
-
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{4pt}
-\setlength{\columnsep}{0.5in}
-\setlength{\columnseprule}{0pt}
-
-% Princeton orange + neutral palette
-\definecolor{princetonOrange}{HTML}{E77500}
-\definecolor{princetonBlack}{HTML}{000000}
-\definecolor{headingBlue}{HTML}{1A365D}
-\definecolor{panelBg}{HTML}{F6F3EC}
-\definecolor{accentGreen}{HTML}{1B4332}
-
-\newcommand{\panel}[2]{%
-  \noindent\colorbox{panelBg}{\begin{minipage}{\linewidth}%
-    \vspace{4pt}%
-    {\Large\bfseries\color{headingBlue} #1}\par%
-    \vspace{4pt}%
-    \rule{\linewidth}{1pt}\par%
-    \vspace{6pt}%
-    #2%
-    \vspace{6pt}%
-  \end{minipage}}\par\vspace{10pt}%
-}
-
-\newcommand{\stat}[2]{%
-  \begin{minipage}{0.24\linewidth}%
-    \centering%
-    {\Huge\bfseries\color{princetonOrange} #1}\par%
-    {\small #2}%
-  \end{minipage}%
-}
 
 \pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\setlength{\columnsep}{0.38in}
+\setlist[itemize]{leftmargin=0.9em,itemsep=2pt,topsep=2pt}
+
+\definecolor{princetonOrange}{HTML}{E77500}
+\definecolor{ink}{HTML}{111111}
+\definecolor{slate}{HTML}{233142}
+\definecolor{softBlue}{HTML}{EAF2F8}
+\definecolor{softOrange}{HTML}{FFF0DF}
+\definecolor{softGreen}{HTML}{EAF6EF}
+\definecolor{ruleGray}{HTML}{CDD5DF}
+
+\newcommand{\panel}[2]{%
+  \noindent\fcolorbox{ruleGray}{#1}{%
+    \begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
+    \vspace{0.10in}
+    #2
+    \vspace{0.10in}
+    \end{minipage}}%
+  \par\vspace{0.13in}}
+
+\newcommand{\paneltitle}[1]{%
+  {\fontsize{27}{30}\selectfont\bfseries\color{slate} #1}\par
+  \vspace{3pt}{\color{princetonOrange}\rule{\linewidth}{2pt}}\vspace{5pt}}
 
 \begin{document}
 
-%------------------------------------------------------------------
-% HEADER (full width)
-%------------------------------------------------------------------
 \begin{center}
-\vspace*{-0.2in}
-{\fontsize{68}{76}\selectfont\bfseries\color{princetonBlack}%
-Polynomial Hint Preconditioning for\\[2pt]Universal Time Series Forecasting}\par
-\vspace{10pt}
-{\fontsize{30}{34}\selectfont Jerry Han\par}
-\vspace{4pt}
-{\fontsize{22}{26}\selectfont\itshape Advisor: Prof.\ Elad Hazan\quad$\cdot$\quad Second Reader: Prof.\ Amit Singer\par}
-{\fontsize{22}{26}\selectfont Department of Mathematics $\cdot$ Program in Statistics and Machine Learning\par}
-{\fontsize{22}{26}\selectfont Princeton University\par}
-\vspace{4pt}
+{\fontsize{56}{62}\selectfont\bfseries\color{ink} Polynomial Input Preconditioning for Zero-Shot Time-Series Forecasting}\par
+\vspace{0.08in}
+{\fontsize{24}{28}\selectfont Jerry Han \quad | \quad Advisor: Prof. Elad Hazan \quad | \quad Program in Statistics and Machine Learning, Princeton University}\par
+\vspace{0.08in}
 {\color{princetonOrange}\rule{\linewidth}{4pt}}
 \end{center}
 
-\vspace{0.1in}
+\vspace{0.15in}
 
-%------------------------------------------------------------------
-% BIG-NUMBER STRIP
-%------------------------------------------------------------------
-\begin{center}
-\stat{$-2.9\%$}{geometric-mean MASE improvement over baseline}\hfill
-\stat{$329 / 485$}{paired wins ($p < 10^{-14}$, Holm-corrected)}\hfill
-\stat{$12$K}{extra parameters ($0.11\%$ overhead)}\hfill
-\stat{$11.4$M}{Moirai-2 Small parameters, $5$ seeds, $97$ configs}
-\end{center}
-
-\vspace{0.3in}
-{\color{princetonOrange}\rule{\linewidth}{1pt}}
-\vspace{0.2in}
-
-%------------------------------------------------------------------
-% MAIN THREE-COLUMN BODY
-%------------------------------------------------------------------
 \begin{multicols}{3}
 
-%=== COLUMN 1 ======================================================
-\panel{1 — Problem: The Cross-Patch Bottleneck}{
-{\large
-Universal time series forecasters \emph{patch} the input into blocks of $P$ samples and embed each patch independently before any attention layer. A daily cycle in $15$-minute data spans $96$ steps $= 6$ patches---\textbf{attention alone must discover this}.
+\panel{softBlue}{
+\paneltitle{Problem}
+{\fontsize{17}{21}\selectfont
+Patch-based time-series transformers embed each patch independently before attention. This is efficient, but it means each initial token only sees its local $P$-step window. Long-range structure across patches has to be discovered entirely inside the transformer.
 
-\vspace{8pt}
-Smaller models, with fewer heads/layers, are most constrained. We inject cross-patch information \emph{before the first attention layer} via a fixed polynomial filter that preserves parameter count.
+\vspace{0.06in}
+\textbf{Research question:} can a fixed polynomial transformation expose useful cross-patch structure before tokenization?
+}
+}
 
-\vspace{6pt}
+\panel{softGreen}{
+\paneltitle{Preliminaries}
+{\fontsize{16}{20}\selectfont
+Universal Sequence Preconditioning preprocesses a sequence with a fixed polynomial convolution,
+\[
+x_t^{\mathrm{pre}}=\sum_{k=0}^{d}c_k x_{t-k}.
+\]
+In the online linear-dynamical-systems setting, this kind of transformation can improve regret bounds by reducing the effective difficulty of the hidden dynamics. This project tests whether the same idea helps in a different setting: offline pretraining and zero-shot multi-step forecasting.
+}
+}
+
+\panel{softOrange}{
+\paneltitle{Method}
+{\fontsize{17}{21}\selectfont
+For a normalized time series $x_t$, compute a fixed Chebyshev residual
+\[
+r_t=\sum_{k=1}^{d}c_k x_{t-ks}.
+\]
+With $d=4$ and stride $s=P=16$,
+\[
+r_t=-x_{t-32}+\frac{1}{8}x_{t-64}.
+\]
+Concatenate this as a third input channel:
+\[
+\mathbf e_i=\mathrm{ResBlock}_{3P\to d}([\mathbf p_i;\mathbf m_i;\mathbf r_i]).
+\]
+Only the input projection widens; the transformer decoder and forecasting target are unchanged.
+}
+}
+
+\panel{softGreen}{
+\paneltitle{Architecture}
 \includegraphics[width=\linewidth]{figures/fig_architecture.pdf}
-}}
+{\fontsize{14}{17}\selectfont
+Orange components are the only changes relative to Moirai 2.0: preconditioning residual, optional training-time channel dropout, concatenation, and the widened input projection.
+}
+}
 
-\panel{2 — Our Method: Hint Preconditioning}{
-{\large
-Compute the \textbf{hint channel}
-\[
-  h[t] \;=\; \sum_{k=0}^{d} a_k\, x[t - k s], \qquad s = P,
-\]
-and \emph{concatenate} it with the target and observation mask before the per-patch projection:
-\[
-  \mathbf{e}_i = \mathrm{ResBlock}_{3P \to d}([\mathbf{p}_i;\,\mathbf{m}_i;\,\tilde{\mathbf{h}}_i]).
-\]
-For $d = 4$, $s = 16$:
-\[
-  h[t] \;=\; x[t] - x[t{-}32] + \tfrac{1}{8}\, x[t{-}64].
-\]
-Only the first linear layer widens; the transformer encoder is unchanged.
+\columnbreak
 
-\vspace{6pt}
-\textbf{Hint dropout.} At training each patch's hint is zeroed with prob.\ $0.1$; at inference the full hint is provided.
-}}
+\panel{softBlue}{
+\paneltitle{Experimental Design}
+{\fontsize{16}{20}\selectfont
+\begin{itemize}
+\item Model: Moirai 2.0 Small, 11.4M parameters.
+\item Data: public LOTSA setup, 27B observations.
+\item Main budget: 10K optimizer steps, 5 seeds.
+\item Extended budget: 100K optimizer steps, 5 seeds.
+\item Primary benchmark: GIFT-Eval, 97 dataset-by-horizon configurations.
+\item External benchmark: FEV-Bench, 100 forecasting tasks.
+\item Metric: geometric-mean MASE; lower is better.
+\end{itemize}
+}
+}
 
-%=== COLUMN 2 ======================================================
-\panel{3 — Why Chebyshev? (Theory)}{
-{\large
-Two classical results motivate the choice of filter coefficients.
-
-\vspace{6pt}
-\textbf{(i) Chebyshev minimax theorem.} Among all monic polynomials of degree $d$,
-\[
-  \tilde T_d \;=\; \arg\min_{q \text{ monic}} \;\max_{x \in [-1,1]} |q(x)|, \quad \|\tilde T_d\|_\infty = 2^{1-d}.
-\]
-
-\textbf{(ii) LDS preconditioning} (Marsden \& Hazan '25): applying $p(B)$ to an observation sequence $y_t = C A^t h_0$ is equivalent to multiplying the hidden dynamics by $p^*(A)$. The Chebyshev choice minimizes the worst-case spectral amplification.
-
-\vspace{6pt}
-\textbf{Frequency response (new).} For our filter at stride $s$ the magnitude
-\[
-  |H(\omega)|^2 = p\!\big(e^{-j 2\pi s\omega}\big)\,\overline{p\!\big(e^{-j 2\pi s\omega}\big)}
-\]
-is a real trigonometric polynomial in $\cos(2\pi s\omega)$, and attains its minimum value
-\[
-  |H(\omega_k)| \;=\; 2^{\,1 - d} \quad \text{at}\quad \omega_k = k/(2s), \; k \in \mathbb{Z}.
-\]
-}}
-
-\panel{4 — Synthetic LDS: Theory Validation}{
-{\large\centering
-\includegraphics[width=\linewidth]{figures/synth_lds_spectrum.pdf}\par
-\raggedright
-Simulated LDS ($\rho = 0.99$, $m = 5$, stride $s = 3$).\\
-Filter notches land at $\omega = 0, 1/6, 1/3$---\textbf{exactly where the theorem predicts}. Notch depth scales as $2^{2-2d}$, matching the Chebyshev minimax constant.
-}}
-
-%=== COLUMN 3 ======================================================
-\panel{5 — Empirical Results}{
-{\large
-GIFT-Eval: $97$ dataset $\times$ horizon configurations, context length $4{,}000$, $5$ seeds.
-
-\vspace{4pt}
+\panel{softOrange}{
+\paneltitle{Main Results}
+{\fontsize{16}{20}\selectfont
+The polynomial channel improves GIFT-Eval normalized MASE by $2.9\%$, wins 72 of 97 configurations after averaging across five seeds, adds only $0.11\%$ parameters, and reaches a $3.9\%$ improvement at 100K training steps.
+}
+\vspace{0.04in}
 \begin{center}
-\small
-\begin{tabular}{lrrr}
+\fontsize{15}{18}\selectfont
+\begin{tabular}{lccc}
 \toprule
-\textbf{Method} & \textbf{MASE} & \textbf{$\Delta$\%} & \textbf{Wins / 485} \\
+Method & MASE & $\Delta$ & Wins \\
 \midrule
-\textbf{HD10 (ours)} & \textbf{0.837} & \textbf{$-$2.9\%} & \textbf{329} \\
-Zero (capacity ctrl) & 0.858 & $-$0.5\% & 262 \\
-Baseline            & 0.862 & --- & --- \\
-Duplicate (cap.\ ctrl) & 0.865 & $+$0.4\% & 217 \\
+\textbf{\texttt{d4\_dropout}} & \textbf{0.837} & \textbf{$-2.9\%$} & \textbf{72/97} \\
+\texttt{d4} & 0.838 & $-2.8\%$ & 72/97 \\
+Zero ctrl & 0.858 & $-0.5\%$ & 54/97 \\
+Baseline & 0.862 & --- & --- \\
+Duplicate ctrl & 0.865 & $+0.4\%$ & 39/97 \\
 \bottomrule
 \end{tabular}
 \end{center}
+{\fontsize{16}{20}\selectfont
+The capacity-matched controls show the effect is not just from adding parameters. A zero channel is neutral, while duplicating the raw input hurts.
+}
+}
 
-\vspace{4pt}
-\textbf{The capacity controls hurt.} Duplicating the input as a second channel wins only $44.7\%$ of the time (worse than chance); zeros are neutral. \emph{Polynomial content drives the improvement, not extra parameters.}
+\panel{softGreen}{
+\paneltitle{Statistical Evidence}
+{\fontsize{17}{21}\selectfont
+For GIFT-Eval, I average MASE per configuration across five seeds and run a two-sided paired sign test. \texttt{d4\_dropout} wins 72 of 97 configurations over the baseline, giving $p<10^{-5}$.
 
-\vspace{4pt}
-\includegraphics[width=\linewidth]{figures/fig1_capacity_ablation.pdf}
-}}
+\vspace{0.05in}
+This is a controlled paired comparison: every model is trained with the same data, optimizer, precision, and seed set within the compared condition.
+}
+}
 
-\panel{6 — Statistical Methodology (CSML)}{
-{\large
-\begin{itemize}[leftmargin=1em]
-\item Paired sign test, $485$ observations: $p = 2.9\times 10^{-15}$.
-\item \textbf{Holm--Bonferroni} per-seed: $4$ of $5$ seeds individually significant at $\alpha = 0.05$.
-\item \textbf{BCa 95\% bootstrap} ($B = 5{,}000$): relative improvement $\in [-3.71\%, -2.12\%]$; excludes zero.
-\item Cohen's $d = +0.31$ (paired log-MASE); Cliff's $\delta = +0.36$.
-\item Post-hoc power: $n = 65$ suffices for $80\%$ power; we have $485$ ($7.5\times$).
-\end{itemize}
-}}
-
-\end{multicols}
-
-%------------------------------------------------------------------
-% BOTTOM STRIP: TAKEAWAYS
-%------------------------------------------------------------------
-\vspace{0.2in}
-{\color{princetonOrange}\rule{\linewidth}{1pt}}
-\vspace{0.15in}
-
-\noindent\colorbox{accentGreen!10}{\begin{minipage}{\linewidth}%
-\vspace{8pt}
+\panel{softBlue}{
+\paneltitle{Fixed vs. Learned Filters}
 \begin{center}
-{\LARGE\bfseries\color{accentGreen} Takeaways}
+\fontsize{14}{17}\selectfont
+\begin{tabular}{lcc}
+\toprule
+Setting & MASE & $\Delta$ \\
+\midrule
+\textbf{Fixed Chebyshev} & \textbf{0.8234} & \textbf{$-4.99\%$} \\
+Learned, Cheb. init & 0.8332 & $-3.85\%$ \\
+Learned, zero init & 0.8358 & $-3.57\%$ \\
+\bottomrule
+\end{tabular}
 \end{center}
-\begin{multicols}{3}
-\large
-\textbf{1. Theory meets practice.} Chebyshev preconditioning is \emph{minimax-optimal} for spectral compression; empirically, it beats all tested alternatives (EMA, Legendre, finite differences, duplicate, zero).
+{\fontsize{16}{20}\selectfont
+The fixed Chebyshev coefficients outperform learned coefficient vectors, even when the learned model is initialized at Chebyshev. This suggests the polynomial channel is a useful inductive bias.
+}
+}
+
+\panel{softOrange}{
+\paneltitle{Personal Contribution}
+{\fontsize{16}{20}\selectfont
+\begin{itemize}
+\item Implemented the preconditioning channel in the Moirai 2.0 training/evaluation pipeline.
+\item Designed the zero and duplicate capacity controls.
+\item Ran the seed, degree, coefficient-learning, horizon, and 100K-step analyses.
+\item Prepared the CSML paper, poster, and presentation materials.
+\item Thanks to Alex Kawaja for working together on this collaborative project.
+\end{itemize}
+}
+}
 
 \columnbreak
-\textbf{2. Capacity-efficient.} $0.11\%$ extra parameters yield $-2.9\%$ MASE and $-3.9\%$ at $100$K steps. No change to the transformer encoder.
 
-\columnbreak
-\textbf{3. Predictable from spectrum.} Datasets with more spectral mass in the filter's passband benefit more ($r = +0.10$, $39$ datasets)---mechanism consistent with Theorem~2.
+\panel{softBlue}{
+\paneltitle{Ablations}
+\includegraphics[width=0.92\linewidth]{figures/degree_sweep_line.pdf}\par
+{\fontsize{15}{18}\selectfont
+All tested Chebyshev degrees improve over baseline. Degree 4 is a strong default, not a sharply tuned optimum.
+}
+}
+
+\panel{softOrange}{
+\paneltitle{Independent Benchmark}
+\begin{center}
+\fontsize{15}{18}\selectfont
+\begin{tabular}{lcc}
+\toprule
+Method & MASE & SQL \\
+\midrule
+\textbf{\texttt{d4\_dropout}} & \textbf{1.2532} & \textbf{1.0236} \\
+Baseline & 1.2908 & 1.0562 \\
+$\Delta$ & $-2.91\%$ & $-3.09\%$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+{\fontsize{16}{20}\selectfont
+The improvement transfers to FEV-Bench, an independent benchmark with 100 forecasting tasks from 96 datasets.
+}
+}
+
+\panel{softBlue}{
+\paneltitle{Horizon Effects}
+\begin{center}
+\fontsize{14}{17}\selectfont
+\begin{tabular}{lccc}
+\toprule
+Term & Baseline & \texttt{d4} & \texttt{d4\_dropout} \\
+\midrule
+Short & 0.840 & \textbf{0.825} & 0.828 \\
+Medium & 0.859 & 0.830 & \textbf{0.823} \\
+Long & 0.924 & 0.880 & \textbf{0.874} \\
+\bottomrule
+\end{tabular}
+\end{center}
+{\fontsize{15}{18}\selectfont
+The largest gain is on long-horizon tasks: \texttt{d4\_dropout} improves MASE by $5.3\%$ relative to baseline in the long-horizon bin.
+}
+}
+
+\panel{softGreen}{
+\paneltitle{Training Dynamics}
+\includegraphics[width=\linewidth]{figures/fig_training_loss_main.pdf}
+{\fontsize{15}{18}\selectfont
+At 100K training steps, the MASE improvement grows to $-3.9\%$. The preconditioned model also has lower cross-seed standard deviation: 0.0079 vs 0.0189 for the baseline.
+}
+}
+
 \end{multicols}
-\vspace{4pt}
+
+\vspace{0.03in}
+\noindent\fcolorbox{princetonOrange}{white}{%
+\begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
+\vspace{0.08in}
+{\fontsize{24}{28}\selectfont\bfseries\color{slate} Takeaway:}
+{\fontsize{21}{25}\selectfont
+ A fixed, theory-guided input channel improves a modern time-series foundation model without changing the transformer stack. The gain comes from polynomial content, not added width, and is strongest at longer training budgets and longer horizons.}
+\vspace{0.08in}
 \end{minipage}}
 
 \vfill
 \begin{center}
-\small
-JP draft and code: \url{https://github.com/jerryhan60/ts-usp-paper} \quad $\cdot$ \quad Contact: jh1161@princeton.edu \quad $\cdot$ \quad Workshop paper (FMSD @ ICML 2026) concurrent
+{\fontsize{13}{16}\selectfont
+CSML Independent Work, Spring 2026 \quad | \quad Code and paper repository: \url{https://github.com/jerryhan60/ts-usp-paper} \quad | \quad Contact: \texttt{jh1161@princeton.edu}}
 \end{center}
 
 \end{document}

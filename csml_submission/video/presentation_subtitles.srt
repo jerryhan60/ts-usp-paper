@@ -1,0 +1,189 @@
+1
+00:00:00,000 --> 00:00:06,614
+This presentation describes polynomial input preconditioning
+for zero-shot time-series forecasting.
+
+2
+00:00:06,614 --> 00:00:14,884
+The key preliminary is Universal Sequence Preconditioning,
+proposed by Marsden and Hazan for online prediction in
+marginally stable linear dynamical systems.
+
+3
+00:00:14,884 --> 00:00:26,304
+Their insight is that instead of asking a learner to infer a
+potentially large hidden state directly, one can first
+transform the observed sequence with a fixed polynomial
+convolution.
+
+4
+00:00:26,304 --> 00:00:34,180
+Chebyshev-style coefficients are useful because they uniformly
+damp the difficult modes of the hidden dynamics across a broad
+spectral range.
+
+5
+00:00:34,180 --> 00:00:42,844
+The intuition for this project is to use that same fixed,
+theory-guided signal as information given to a patch-based
+transformer before tokenization.
+
+6
+00:00:42,844 --> 00:00:48,931
+The starting point is a common design in modern time-series
+foundation models like Moirai 2.0.
+
+7
+00:00:48,931 --> 00:00:57,857
+These models split the input sequence into fixed-length
+patches, embed each patch independently, and then run a
+transformer over the resulting tokens.
+
+8
+00:00:57,857 --> 00:01:05,161
+This is efficient, but it creates a bottleneck: before
+attention, each token only sees its own local patch.
+
+9
+00:01:05,161 --> 00:01:10,842
+If important structure spans multiple patches, the transformer
+has to discover that structure later.
+
+10
+00:01:10,842 --> 00:01:15,966
+My idea is to expose a small amount of cross-patch information
+before tokenization.
+
+11
+00:01:15,966 --> 00:01:20,301
+I use a fixed polynomial convolution motivated by Universal
+Sequence Preconditioning.
+
+12
+00:01:20,301 --> 00:01:31,730
+In the default setting, the residual channel is r sub t equals
+negative x sub t minus thirty two, plus one eighth times x sub
+t minus sixty four.
+
+13
+00:01:31,730 --> 00:01:40,007
+This is computed from the normalized input series, split into
+patches, and concatenated alongside the raw input patch and
+observation mask.
+
+14
+00:01:40,007 --> 00:01:47,101
+The only architectural change is that the first projection
+layer gets wider, from two patch channels to three.
+
+15
+00:01:47,101 --> 00:01:51,042
+The transformer decoder, output head, and forecast target are
+unchanged.
+
+16
+00:01:51,042 --> 00:01:58,136
+The overhead is only twelve thousand parameters, or about zero
+point one one percent of Moirai 2.0 Small.
+
+17
+00:01:58,136 --> 00:02:01,130
+This diagram shows the full architectural change.
+
+18
+00:02:01,130 --> 00:02:13,532
+The orange boxes are the new parts: compute the Chebyshev
+residual, optionally apply hint dropout during training,
+concatenate the raw input, mask, and residual, and widen the
+input projection.
+
+19
+00:02:13,532 --> 00:02:20,374
+Everything inside the Moirai 2.0 decoder block and the
+autoregressive quantile output head stays the same.
+
+20
+00:02:20,374 --> 00:02:25,272
+The main result is on GIFT-Eval, which has ninety-seven
+dataset-by-horizon forecasting configurations.
+
+21
+00:02:25,272 --> 00:02:33,843
+Across five seeds, the preconditioned model improves
+geometric-mean normalized MASE by two point nine percent over
+the Moirai 2.0 Small baseline.
+
+22
+00:02:33,843 --> 00:02:43,230
+After averaging each configuration across seeds, it wins
+seventy-two of ninety-seven configurations, with a paired
+sign-test p-value below ten to the minus five.
+
+23
+00:02:43,230 --> 00:02:45,679
+The important control is capacity matching.
+
+24
+00:02:45,679 --> 00:02:54,658
+I trained the same widened architecture with a zero third
+channel and with a duplicate of the input as the third
+channel.
+
+25
+00:02:54,658 --> 00:03:02,004
+Those controls do not reproduce the gain, so the improvement
+comes from the polynomial content of the channel.
+
+26
+00:03:02,004 --> 00:03:05,855
+I also tested whether the result transfers beyond GIFT-Eval.
+
+27
+00:03:05,855 --> 00:03:18,265
+On FEV-Bench, an independent benchmark with one hundred
+forecasting tasks, the same method improves MASE by two point
+nine percent and scaled quantile loss by three point one
+percent.
+
+28
+00:03:18,265 --> 00:03:23,827
+In ablations, every tested Chebyshev degree from two through
+seven improves over baseline.
+
+29
+00:03:23,827 --> 00:03:30,674
+Fixed Chebyshev coefficients also outperform learned
+coefficient vectors initialized either from Chebyshev
+coefficients or from zero.
+
+30
+00:03:30,674 --> 00:03:33,135
+Finally, the effect grows with training.
+
+31
+00:03:33,135 --> 00:03:42,981
+At one hundred thousand steps, the MASE improvement reaches
+three point nine percent, and the preconditioned model has
+lower cross-seed variance than the baseline.
+
+32
+00:03:42,981 --> 00:03:50,776
+The gains are also largest on longer-horizon forecasting
+tasks, where the dropout version is more robust during
+autoregressive decoding.
+
+33
+00:03:50,776 --> 00:03:57,260
+The takeaway is that foundation-model performance does not
+only come from scaling model size.
+
+34
+00:03:57,260 --> 00:04:06,523
+A small, fixed, theory-guided transformation placed before
+tokenization can improve zero-shot forecasting while leaving
+the transformer itself almost completely unchanged.
+
+35
+00:04:06,523 --> 00:04:13,470
+For time series models, this suggests a practical path toward
+more accurate and parameter-efficient forecasters.

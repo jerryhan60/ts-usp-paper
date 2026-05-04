@@ -1,0 +1,7 @@
+Title:
+Polynomial Input Preconditioning for Zero-Shot Time-Series Forecasting
+
+Abstract:
+Modern time-series foundation models such as Moirai 2.0 use patch-based transformers to forecast across many domains without task-specific retraining. This project studies whether a fixed, theory-guided input transformation can improve such models without scaling the transformer itself. Building on Universal Sequence Preconditioning, I introduce polynomial input preconditioning: before patching, a fixed Chebyshev polynomial residual of the input time series is computed and concatenated as an auxiliary channel alongside the raw target and observation mask. The forecast target, transformer decoder, and output head are unchanged, and the method adds only 12K parameters, or 0.11% of Moirai 2.0 Small.
+
+Across 97 GIFT-Eval configurations and 5 seeds, polynomial input preconditioning improves geometric-mean normalized MASE by 2.9% over a Moirai 2.0 Small baseline, winning 72 of 97 per-configuration comparisons after averaging across seeds (paired sign test, p < 1e-5). Capacity-matched zero-channel and duplicate-channel controls show that the gain comes from the polynomial content rather than added width. The method also improves FEV-Bench by 2.9% MASE and 3.1% scaled quantile loss, and reaches a 3.9% improvement at a 100K-step training budget. These results suggest that small, structured pre-tokenization transformations can make time-series foundation models more accurate and parameter-efficient.

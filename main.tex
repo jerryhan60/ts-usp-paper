@@ -245,6 +245,27 @@ long   & 21 & 0.924 & 0.880 ($-4.7\%$) & \textbf{0.874 ($-5.3\%$)} \\
 \vskip -0.15in
 \end{table}
 
+\paragraph{Matched official schedule.} To verify that the benefit is not an artifact of our 1K-warmup schedule, we also train with the official Moirai 2.0 protocol (10K warmup, 100K total steps) across 5 seeds. Table~\ref{tab:official-schedule} shows that \texttt{d4\_dropout} improves by $-3.0\%$ over Baseline under this schedule, consistent with the $-3.9\%$ observed under our default schedule.
+
+\begin{table}[t]
+\caption{Official Moirai 2.0 schedule (10K warmup, 100K steps, 5 seeds). Normalized geomean MASE.}
+\label{tab:official-schedule}
+\vskip 0.05in
+\centering
+\begin{small}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{MASE} & \textbf{Std} & \textbf{$\Delta$\%} \\
+\midrule
+\textbf{\texttt{d4\_dropout} (Ours)} & \textbf{0.864} & $0.020$ & \textbf{$-3.0\%$} \\
+Baseline & $0.891$ & $0.013$ & --- \\
+\bottomrule
+\end{tabular}
+\end{small}
+\vskip -0.1in
+\end{table}
+
 %==============================================================================
 \section{Discussion and Conclusion}
 %==============================================================================

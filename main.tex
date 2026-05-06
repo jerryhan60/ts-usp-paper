@@ -305,8 +305,8 @@ Seeds & 0, 1, 2, 7, 42 (5 seeds for main results) \\
 
 All evaluations use the GIFT-Eval benchmark \citep{vijay2024gifteval} with 97 dataset$\times$horizon configurations:
 \begin{itemize}
-    \item Context length: 4,000 tokens (maximum supported)
-    \item Patch size: $P = 16$ (fixed in Moirai 2.0; the variable patch sizes $P \in \{8, 32\}$ apply to Moirai 1.x only)
+    \item Context length: 4,000 tokens 
+    \item Patch size: $P = 16$ 
     \item Batch size: 64
     \item Metric: Normalized MASE (each configuration's MASE divided by the seasonal naive baseline's MASE)
     \item Aggregation: geometric mean across 97 configurations

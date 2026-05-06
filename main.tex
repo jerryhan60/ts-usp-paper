@@ -187,23 +187,45 @@ We also consider directly learning the preconditioning coefficients (Table~\ref{
 
 We also compare Chebyshev coefficients with coefficients obtained from Legendre polynomials, EMA, and finite differences and find that Chebyshev performs the best (Appendix~\ref{app:ablations}). We also perform other stride and dropout ablations.
 
+\paragraph{Horizon stratification.} On short horizons (Prediction Length (PL) $\leq 60$) \texttt{d4} and \texttt{d4\_dropout} are within $0.4\%$ of each other (Table~\ref{tab:horizon-main}). On medium and long horizons (PL $\geq 480$) \texttt{d4\_dropout} beats \texttt{d4} by $0.7$--$0.85\%$ relative MASE. The performance increase over baseline is greatest for the long horizon prediction tasks, where we attain a $5.3\%$ MASE reduction. This pattern is consistent with the training--inference mismatch created by autoregressive decoding: dropout makes \texttt{d4\_dropout} more robust when the preconditioning signal becomes partially synthetic at longer horizons.
+
+\begin{table}[t]
+\caption{Horizon stratification (10K steps, 5 seeds). Geomean MASE; $\Delta\%$ relative to BL within each bin.}
+\label{tab:horizon-main}
+\vskip 0.06in
+\centering
+\begin{small}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Term} & \textbf{$n$} & \textbf{BL} & \texttt{d4} \textbf{($\Delta$)} & \texttt{d4\_dropout} \textbf{($\Delta$)} \\
+\midrule
+short  & 55 & 0.840 & \textbf{0.825 ($-1.8\%$)} & 0.828 ($-1.4\%$) \\
+medium & 21 & 0.859 & 0.830 ($-3.4\%$) & \textbf{0.823 ($-4.2\%$)} \\
+long   & 21 & 0.924 & 0.880 ($-4.7\%$) & \textbf{0.874 ($-5.3\%$)} \\
+\bottomrule
+\end{tabular}
+\end{small}
+\vskip -0.15in
+\end{table}
+
 \subsection{Extended Training}
 
 \begin{table}[t]
-\caption{$100$K training budget, 5 seeds. Normalized geomean MASE and raw cross-seed standard deviation are reported.}
+\caption{$100$K training budget, 5 seeds. MASE is averaged per configuration across seeds, then aggregated via geometric mean.}
 \label{tab:100k}
 \vskip 0.1in
 \centering
 \begin{small}
 \setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}lccc@{}}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Method} & \textbf{MASE} & \textbf{$\Delta$\% vs BL} & \textbf{Std} \\
+\textbf{Method} & \textbf{MASE} & \textbf{$\Delta$\%} & \textbf{Std} \\
 \midrule
-\textbf{\texttt{d4\_dropout}} \textbf{(Ours)} & \textbf{0.8443} & \textbf{$-3.88\%$} & \textbf{0.0079} \\
-Baseline            & $0.8784$        & ---               & $0.0189$ \\
-Duplicate (cap.\ ctrl) & $0.8860$        & $+0.86\%$         & $0.0083$ \\
-Zero (cap.\ ctrl)      & $0.8937$        & $+1.73\%$         & $0.0353$ \\
+\textbf{\texttt{d4\_dropout} (Ours)} & \textbf{0.844} & \textbf{$-3.9\%$} & $0.008$ \\
+Baseline            & $0.878$        & ---           & $0.019$ \\
+Duplicate ctrl      & $0.886$        & $+0.9\%$      & $0.008$ \\
+Zero ctrl           & $0.894$        & $+1.7\%$      & $0.035$ \\
 \bottomrule
 \end{tabular}
 \end{small}
@@ -223,50 +245,7 @@ At 100K optimizer steps (Table~\ref{tab:100k}, 5 seeds) the relative MASE reduct
 
 \paragraph{Training dynamics.} The training-loss curves in Fig.~\ref{fig:trainloss} separate early and remain ordered throughout the run, with the gap widening after roughly 20K steps. This is consistent with the 100K evaluation results too. The preconditioning channel is not merely a short-horizon optimization aid, but continues to improve the learned predictor as training proceeds.
 
-\paragraph{Horizon stratification.} On short horizons (Prediction Length (PL) $\leq 60$) \texttt{d4} and \texttt{d4\_dropout} are within $0.4\%$ of each other (Table~\ref{tab:horizon-main}). On medium and long horizons (PL $\geq 480$) \texttt{d4\_dropout} beats \texttt{d4} by $0.7$--$0.85\%$ relative MASE. The performance increase over baseline is greatest for the long horizon prediction tasks, where we attain a $5.3\%$ MASE reduction. 
-
-This pattern is consistent with the training--inference mismatch created by autoregressive decoding. At longer horizons, the preconditioning channel increasingly depends on model-generated history rather than observed context; dropout exposes the model to missing preconditioning patches during training, making \texttt{d4\_dropout} more robust when those signals become partially synthetic at inference.
-
-\begin{table}[t]
-\caption{Horizon stratification of \texttt{d4} vs \texttt{d4\_dropout} vs Baseline. 5-seed cross-config geomean MASE; $\Delta\%$ relative to BL within each bin.}
-\label{tab:horizon-main}
-\vskip 0.06in
-\centering
-\begin{small}
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{lcccc}
-\toprule
-\textbf{Term} & \textbf{$n$} & \textbf{BL} & \texttt{d4} \textbf{($\Delta$)} & \texttt{d4\_dropout} \textbf{($\Delta$)} \\
-\midrule
-short  & 55 & 0.840 & \textbf{0.825 ($-1.8\%$)} & 0.828 ($-1.4\%$) \\
-medium & 21 & 0.859 & 0.830 ($-3.4\%$) & \textbf{0.823 ($-4.2\%$)} \\
-long   & 21 & 0.924 & 0.880 ($-4.7\%$) & \textbf{0.874 ($-5.3\%$)} \\
-\bottomrule
-\end{tabular}
-\end{small}
-\vskip -0.15in
-\end{table}
-
-\paragraph{Different warmup schedules} We also train with 100K total steps and 10K warmup instead across 5 seeds. Table~\ref{tab:official-schedule} shows that \texttt{d4\_dropout} improves by $-3.0\%$ over Baseline under this schedule, consistent with the $-3.9\%$ observed under our default schedule (1K warmup).
-
-\begin{table}[t]
-\caption{Official Moirai 2.0 schedule (10K warmup, 100K steps, 5 seeds). Normalized geomean MASE.}
-\label{tab:official-schedule}
-\vskip 0.05in
-\centering
-\begin{small}
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{lcccc}
-\toprule
-\textbf{Method} & \textbf{MASE} & \textbf{Std} & \textbf{$\Delta$\%} \\
-\midrule
-\textbf{\texttt{d4\_dropout} (Ours)} & \textbf{0.864} & $0.020$ & \textbf{$-3.0\%$} \\
-Baseline & $0.891$ & $0.013$ & --- \\
-\bottomrule
-\end{tabular}
-\end{small}
-\vskip -0.1in
-\end{table}
+\paragraph{Different warmup schedules.} We also train with 10K warmup (the official Moirai 2.0 schedule) instead of 1K, across 5 seeds and 100K total steps. \texttt{d4\_dropout} improves by $-3.0\%$ over Baseline under this schedule (Table~\ref{tab:official-schedule} in Appendix~\ref{app:100k}), consistent with the $-3.9\%$ observed under our default schedule.
 
 %==============================================================================
 \section{Discussion and Conclusion}
@@ -634,6 +613,27 @@ Zero & 0.8917 & 0.8585 & 0.8750 & 0.8825 & 0.9610 & 0.8937 \\
 \end{table}
 
 Two findings stand out. First, at a 100K-step budget, \texttt{d4\_dropout} remains substantially better than the matched baseline, with a larger relative MASE gap ($-3.9\%$ vs.\ $-2.9\%$ at 10K) and lower cross-seed variance. Second, the capacity controls that were near-neutral at 10K now actively hurt: Duplicate degrades by 0.9\% and Zero by 1.7\%. The baseline shows higher variance across seeds at 100K (seed 0 reaches 0.9092 due to late-training instability), while \texttt{d4\_dropout} remains stable (range 0.83--0.86).
+
+\subsection{Official Moirai 2.0 Schedule}
+
+To verify that the benefit is not an artifact of our 1K-warmup schedule, we also train with the official Moirai 2.0 protocol (10K warmup, 100K total steps) across 5 seeds.
+
+\begin{table}[H]
+\centering
+\caption{Official Moirai 2.0 schedule (10K warmup, 100K steps, 5 seeds). Normalized geomean MASE.}
+\label{tab:official-schedule}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{MASE} & \textbf{Std} & \textbf{$\Delta$\%} \\
+\midrule
+\textbf{\texttt{d4\_dropout} (Ours)} & \textbf{0.864} & $0.020$ & \textbf{$-3.0\%$} \\
+Baseline & $0.891$ & $0.013$ & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\texttt{d4\_dropout} improves by $-3.0\%$ under the official protocol, consistent with $-3.9\%$ under our default 1K-warmup schedule.
 
 \section{FEV-Bench Evaluation}
 \label{app:fevbench}

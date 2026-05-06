@@ -36,7 +36,7 @@
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-Universal Sequence Preconditioning (USP) is a recent theoretical framework for online sequence prediction that preprocesses observations via a fixed polynomial convolution, yielding hidden-dimension-free sublinear regret for marginally stable linear dynamical systems. This paper investigates whether these techniques transfer empirically to zero-shot patch-based transformer time-series forecasters such as Moirai 2.0. We propose \textbf{polynomial input preconditioning}, where we concatenate the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. By only adding $0.11\%$ parameters, our method improves a Moirai 2.0 Small baseline by $2.9\%$ geometric-mean MASE on GIFT-Eval and achieves similar gains on FEV-Bench. At a 100K-step budget, the method remains substantially better than the matched baseline, with a larger relative gap and lower cross-seed variance. Polynomial input preconditioning performs better with longer prediction horizon lengths, attaining a $5.3\%$ improvement on long horizon prediction tasks. Capacity-matched zero and duplicate-channel controls show that the gain comes from the polynomial content rather than extra parameters. These results suggest that time-series foundation models can benefit substantially from theory-guided structure injected before tokenization, offering a lightweight alternative to improving model performance without scaling model size or attention complexity.
+Universal Sequence Preconditioning (USP) is a recent theoretical framework for online sequence prediction that preprocesses observations via a fixed polynomial convolution, yielding hidden-dimension-free sublinear regret for marginally stable linear dynamical systems. This paper investigates whether these techniques transfer empirically to zero-shot patch-based transformer time-series forecasters such as Moirai 2.0. We propose \textbf{polynomial input preconditioning}, where we concatenate the preconditioned signal as an auxiliary input channel while leaving the forecast target unchanged. By only adding $0.11\%$ parameters, our method improves a Moirai 2.0 Small baseline by $2.9\%$ geometric-mean MASE on GIFT-Eval and achieves similar gains on FEV-Bench. At a 100K-step budget, the method remains substantially better than the matched baseline, with a larger relative gap and lower cross-seed variance. Polynomial input preconditioning performs better with longer prediction horizon lengths, attaining a $5.4\%$ improvement on long horizon prediction tasks. Capacity-matched zero and duplicate-channel controls show that the gain comes from the polynomial content rather than extra parameters. These results suggest that time-series foundation models can benefit substantially from theory-guided structure injected before tokenization, offering a lightweight alternative to improving model performance without scaling model size or attention complexity.
 
 \end{abstract}
 
@@ -143,7 +143,7 @@ On  FEV-Bench (Table~\ref{tab:fev-main}, 5 seeds each), \texttt{d4\_dropout} win
 \midrule
 \textbf{\texttt{d4\_dropout} (Ours)} & \textbf{1.254} & \textbf{1.024} & \textbf{78/100} & $< 10^{-7}$ \\
 Baseline                             & $1.282$        & $1.045$        & ---             & --- \\
-$\Delta\%$                           & $-2.2\%$       & $-2.0\%$       &                 &  \\
+$\Delta\%$                           & $-2.2\%$       & $-1.9\%$       &                 &  \\
 \bottomrule
 \end{tabular}
 \end{small}
@@ -175,7 +175,7 @@ We perform a sweep over the Chebyshev polynomial degree $d$ from $d=2$ to $d=7$,
 \textbf{Setting} & \textbf{MASE} & \textbf{Std} & \textbf{$\Delta$\%} \\
 \midrule
 \textbf{Fixed Chebyshev} & \textbf{0.837} & $0.008$ & $\mathbf{-2.9\%}$ \\
-Learned, zero init & $0.839$ & $0.006$ & $-2.7\%$ \\
+Learned, zero init & $0.839$ & $0.006$ & $-2.6\%$ \\
 Learned, Cheb. init & $0.844$ & $0.007$ & $-2.1\%$ \\
 \bottomrule
 \end{tabular}
@@ -191,7 +191,7 @@ We also consider directly learning the preconditioning coefficients (Table~\ref{
 
 We also compare Chebyshev coefficients with coefficients obtained from Legendre polynomials, EMA, and finite differences and find that Chebyshev performs the best (Appendix~\ref{app:ablations}). We also perform other stride and dropout ablations.
 
-\paragraph{Horizon stratification.} On short horizons (Prediction Length (PL) $\leq 60$) \texttt{d4} and \texttt{d4\_dropout} are within $0.4\%$ of each other (Table~\ref{tab:horizon-main}). On medium and long horizons (PL $\geq 480$) \texttt{d4\_dropout} beats \texttt{d4} by $0.7$--$0.85\%$ relative MASE. The performance increase over baseline is greatest for the long horizon prediction tasks, where we attain a $5.3\%$ MASE reduction. This pattern is consistent with our hypothesis that dropout makes \texttt{d4\_dropout} more robust when the preconditioning signal becomes partially synthetic at longer horizons.
+\paragraph{Horizon stratification.} On short horizons (Prediction Length (PL) $\leq 60$) \texttt{d4} and \texttt{d4\_dropout} are within $0.4\%$ of each other (Table~\ref{tab:horizon-main}). On medium and long horizons (PL $\geq 480$) \texttt{d4\_dropout} beats \texttt{d4} by $0.7$--$0.85\%$ relative MASE. The performance increase over baseline is greatest for the long horizon prediction tasks, where we attain a $5.4\%$ MASE reduction. This pattern is consistent with our hypothesis that dropout makes \texttt{d4\_dropout} more robust when the preconditioning signal becomes partially synthetic at longer horizons.
 
 \begin{table}[t]
 \caption{Horizon stratification (10K steps, 5 seeds). Geomean MASE; $\Delta\%$ relative to BL within each bin.}
@@ -206,7 +206,7 @@ We also compare Chebyshev coefficients with coefficients obtained from Legendre 
 \midrule
 short  & 55 & 0.840 & \textbf{0.825 ($-1.8\%$)} & 0.828 ($-1.4\%$) \\
 medium & 21 & 0.859 & 0.830 ($-3.4\%$) & \textbf{0.823 ($-4.2\%$)} \\
-long   & 21 & 0.924 & 0.880 ($-4.7\%$) & \textbf{0.874 ($-5.3\%$)} \\
+long   & 21 & 0.924 & 0.880 ($-4.8\%$) & \textbf{0.874 ($-5.4\%$)} \\
 \bottomrule
 \end{tabular}
 \end{small}
@@ -620,12 +620,12 @@ To verify that our findings generalize beyond GIFT-Eval, we evaluate on FEV-Benc
 \midrule
 \textbf{\texttt{d4\_dropout} (Ours)} & \textbf{1.254} & \textbf{1.024} & \textbf{78/100} \\
 Baseline & $1.282$ & $1.045$ & --- \\
-$\Delta\%$ & $-2.2\%$ & $-2.0\%$ & $p < 10^{-7}$ \\
+$\Delta\%$ & $-2.2\%$ & $-1.9\%$ & $p < 10^{-7}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\texttt{d4\_dropout} achieves $\Delta=-2.2\%$ geometric-mean MASE on FEV-Bench (5-seed mean $1.254 \pm 0.006$ vs.\ BL $1.282 \pm 0.007$) and $\Delta=-2.0\%$ SQL ($1.024 \pm 0.005$ vs.\ $1.045 \pm 0.004$). The improvement wins on $78/100$ tasks ($p < 10^{-7}$, paired sign test), consistent with the GIFT-Eval results.
+\texttt{d4\_dropout} achieves $\Delta=-2.2\%$ geometric-mean MASE on FEV-Bench (5-seed mean $1.254 \pm 0.006$ vs.\ BL $1.282 \pm 0.007$) and $\Delta=-1.9\%$ SQL ($1.024 \pm 0.005$ vs.\ $1.045 \pm 0.004$). The improvement wins on $78/100$ tasks ($p < 10^{-7}$, paired sign test), consistent with the GIFT-Eval results.
 
 \begin{figure}[H]
 \centering
@@ -642,12 +642,12 @@ $\Delta\%$ & $-2.2\%$ & $-2.0\%$ & $p < 10^{-7}$ \\
 \toprule
 \textbf{Degree} & \textbf{MASE (mean $\pm$ std)} & \textbf{$\Delta$\% vs BL} & \textbf{SQL (mean $\pm$ std)} \\
 \midrule
-2 & $1.2780 \pm 0.0039$ & $-0.3\%$ & $1.0425 \pm 0.0032$ \\
+2 & $1.2780 \pm 0.0039$ & $-0.2\%$ & $1.0425 \pm 0.0032$ \\
 3 & $1.2609 \pm 0.0173$ & $-1.6\%$ & $1.0288 \pm 0.0125$ \\
 4 & $1.2532 \pm 0.0064$ & $-2.2\%$ & $1.0236 \pm 0.0053$ \\
-5 & $1.2639 \pm 0.0069$ & $-1.4\%$ & $1.0309 \pm 0.0063$ \\
+5 & $1.2639 \pm 0.0069$ & $-1.3\%$ & $1.0309 \pm 0.0063$ \\
 6 & $1.2521 \pm 0.0068$ & $-2.3\%$ & $1.0236 \pm 0.0060$ \\
-7 & $1.2564 \pm 0.0114$ & $-2.0\%$ & $1.0263 \pm 0.0094$ \\
+7 & $1.2564 \pm 0.0114$ & $-1.9\%$ & $1.0263 \pm 0.0094$ \\
 \bottomrule
 \end{tabular}
 \end{table}

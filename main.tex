@@ -94,7 +94,7 @@ We train Moirai 2.0 Small \citep{liu2024moirai2} (11.4M params, 6-layer transfor
 We then train models \texttt{d4} and \texttt{d4\_dropout} with the architectural modifications described above. For \texttt{d4\_dropout}, the preconditioning channel is independently zeroed with probability $0.1$ per patch during training and always provided at inference. All trained models share identical data, optimiser, seeds, and compute, so the effects we report are controlled relative improvements.
 
 \paragraph{Evaluation}
-At inference, the model predicts multiple future patches per step. For longer horizons, we proceed with autoregressive decoding, where predicted patches are appended to the context and the decoder is re-run with the preconditioning residual recomputed over the extended context.
+At inference, the model predicts multiple future patches per step. For longer horizons, we proceed with autoregressive decoding, where the median forecast patch is appended to the context and the decoder is re-run with the preconditioning residual recomputed over the extended context. MASE is also computed from the median forecast.
 
 Evaluation uses GIFT-Eval \citep{vijay2024gifteval} (97 dataset$\times$horizon configs) at context length 4{,}000. GIFT-Eval is a large-scale zero-shot benchmark for general and foundation time-series forecasters, spanning 23 datasets, over 144{,}000 time series, seven domains, ten sampling frequencies, multivariate inputs, and short- to long-horizon tasks. We report normalized MASE following the GIFT-Eval leaderboard convention: each configuration's MASE is divided by the seasonal naive baseline's MASE, then aggregated via geometric mean. We run 5 seeds (0, 1, 2, 7, 42) and report cross-seed mean and standard deviation.
 
@@ -557,48 +557,6 @@ Chebyshev is best in this seed-0 sweep, while EMA is also competitive and finite
 All three settings beat Baseline, but fixed Chebyshev (0.837) is best. The Chebyshev-init solution consistently keeps $c_2 \approx -1.03$ (the dominant 2-patch lookback) but drifts at other lags, particularly adding $c_3 \approx -0.14$ (a 3-patch term absent from the fixed polynomial). The zero-init solution converges to a smoothly decaying pattern whose sign is seed-dependent ($4/5$ seeds find negative coefficients, $1/5$ finds positive) but whose magnitude is consistent ($|c_1| \approx 0.31$, $|c_2| \approx 0.18$). Despite having strictly more capacity, neither learned variant matches fixed Chebyshev, confirming that the Chebyshev structure provides regularization value.
 
 %==============================================================================
-\section{Horizon Analysis: \texttt{d4} vs \texttt{d4\_dropout}}
-\label{app:horizon}
-%==============================================================================
-
-The preconditioning polynomial for \texttt{d4}/\texttt{d4\_dropout} ($d{=}4$, $s{=}16$) reduces to $r_t = -x_{t-32} + (1/8)\, x_{t-64}$. We compute normalized MASE for Baseline, \texttt{d4}, and \texttt{d4\_dropout} over all $97$ GIFT-Eval configs and $5$ seeds; each bin reports the cross-seed mean of the per-seed cross-config geometric mean.
-
-\begin{table}[H]
-\centering
-\caption{\texttt{d4} vs \texttt{d4\_dropout} vs Baseline by GIFT-Eval term. Bold marks the better of \texttt{d4}/\texttt{d4\_dropout} in each bin.}
-\small
-\begin{tabular}{lcccccc}
-\toprule
-\textbf{Bin} & \textbf{$n$} & \textbf{BL} & \textbf{\texttt{d4}} & \textbf{\texttt{d4\_dropout}} & \textbf{\texttt{d4} $\Delta\%$} & \textbf{\texttt{d4\_dropout} $\Delta\%$} \\
-\midrule
-short  & 55 & 0.8403 & \textbf{0.8252} & 0.8282 & $-1.79\%$ & $-1.44\%$ \\
-medium & 21 & 0.8592 & 0.8301 & \textbf{0.8231} & $-3.39\%$ & $-4.20\%$ \\
-long   & 21 & 0.9237 & 0.8802 & \textbf{0.8744} & $-4.71\%$ & $-5.34\%$ \\
-\midrule
-ALL    & 97 & 0.8618 & 0.8379 & \textbf{0.8368} & $-2.77\%$ & $-2.90\%$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[H]
-\centering
-\caption{\texttt{d4} vs \texttt{d4\_dropout} vs Baseline by raw prediction-length bin (the GIFT-Eval PL distribution has no configs in $(64, 200]$, so we bin around the natural clusters of the benchmark and the $d\cdot s = 64$ mismatch threshold).}
-\small
-\begin{tabular}{lcccccc}
-\toprule
-\textbf{Bin} & \textbf{$n$} & \textbf{BL} & \textbf{\texttt{d4}} & \textbf{\texttt{d4\_dropout}} & \textbf{\texttt{d4} $\Delta\%$} & \textbf{\texttt{d4\_dropout} $\Delta\%$} \\
-\midrule
-$\text{PL} \le 32$       & 30 & 1.0237 & \textbf{1.0074} & 1.0098 & $-1.59\%$ & $-1.36\%$ \\
-$32 < \text{PL} \le 64$  & 25 & 0.6631 & \textbf{0.6496} & 0.6529 & $-2.04\%$ & $-1.55\%$ \\
-$480 \le \text{PL} \le 600$ & 21 & 0.8592 & 0.8301 & \textbf{0.8231} & $-3.39\%$ & $-4.20\%$ \\
-$\text{PL} \ge 720$      & 21 & 0.9237 & 0.8802 & \textbf{0.8744} & $-4.71\%$ & $-5.34\%$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The horizon bins show the same pattern as the main paper: \texttt{d4} is slightly better on the shortest horizons, while \texttt{d4\_dropout} is better on medium and long horizons. The overall difference between the two polynomial variants is small relative to the larger gap between either variant and Baseline.
-
-%==============================================================================
 \section{100K Extended Training}
 \label{app:100k}
 %==============================================================================
@@ -684,12 +642,12 @@ $\Delta\%$ & $-2.2\%$ & $-2.0\%$ & $p < 10^{-7}$ \\
 \toprule
 \textbf{Degree} & \textbf{MASE (mean $\pm$ std)} & \textbf{$\Delta$\% vs BL} & \textbf{SQL (mean $\pm$ std)} \\
 \midrule
-2 & $1.2780 \pm 0.0039$ & $-0.99\%$ & $1.0425 \pm 0.0032$ \\
-3 & $1.2609 \pm 0.0173$ & $-2.32\%$ & $1.0288 \pm 0.0125$ \\
-4 & $1.2532 \pm 0.0064$ & $-2.92\%$ & $1.0236 \pm 0.0053$ \\
-5 & $1.2639 \pm 0.0069$ & $-2.08\%$ & $1.0309 \pm 0.0063$ \\
-6 & $1.2521 \pm 0.0068$ & $-3.00\%$ & $1.0236 \pm 0.0060$ \\
-7 & $1.2564 \pm 0.0114$ & $-2.66\%$ & $1.0263 \pm 0.0094$ \\
+2 & $1.2780 \pm 0.0039$ & $-0.3\%$ & $1.0425 \pm 0.0032$ \\
+3 & $1.2609 \pm 0.0173$ & $-1.6\%$ & $1.0288 \pm 0.0125$ \\
+4 & $1.2532 \pm 0.0064$ & $-2.2\%$ & $1.0236 \pm 0.0053$ \\
+5 & $1.2639 \pm 0.0069$ & $-1.4\%$ & $1.0309 \pm 0.0063$ \\
+6 & $1.2521 \pm 0.0068$ & $-2.3\%$ & $1.0236 \pm 0.0060$ \\
+7 & $1.2564 \pm 0.0114$ & $-2.0\%$ & $1.0263 \pm 0.0094$ \\
 \bottomrule
 \end{tabular}
 \end{table}

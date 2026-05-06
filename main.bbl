@@ -69,11 +69,11 @@ Nie, Y., Nguyen, N.~H., Sinthong, P., and Kalagnanam, J.
   transformers.
 \newblock In ICLR, 2023.
 
-\bibitem[Shchur et~al.(2025)Shchur, Turkmen, Ansari, Stella, and
-  Rangapuram]{shchur2025fevbench}
-Shchur, O., Turkmen, C., Ansari, A.~F., Stella, L., and Rangapuram, S.~S.
-\newblock {FEV-Bench}: A unified benchmark for few-shot time series forecasting
-  evaluation.
+\bibitem[Shchur et~al.(2025)Shchur, Ansari, Turkmen, Stella, Erickson, Guerron,
+  Bohlke-Schneider, and Wang]{shchur2025fevbench}
+Shchur, O., Ansari, A.~F., Turkmen, C., Stella, L., Erickson, N., Guerron, P.,
+  Bohlke-Schneider, M., and Wang, Y.
+\newblock fev-bench: A realistic benchmark for time series forecasting.
 \newblock arXiv preprint arXiv:2509.26468, 2025.
 
 \bibitem[Woo et~al.(2024)Woo, Liu, Kumar, Xiong, Savarese, and

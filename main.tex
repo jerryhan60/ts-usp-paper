@@ -168,7 +168,7 @@ We perform a sweep over the Chebyshev polynomial degree $d$ from $d=2$ to $d=7$,
 \label{tab:learned-coeff-main}
 \vskip 0.05in
 \centering
-\begin{scriptsize}
+\begin{small}
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{@{}lccc@{}}
 \toprule
@@ -179,15 +179,19 @@ Learned, zero init & $0.839$ & $0.006$ & $-2.7\%$ \\
 Learned, Cheb. init & $0.844$ & $0.007$ & $-2.1\%$ \\
 \bottomrule
 \end{tabular}
-\end{scriptsize}
+\end{small}
 \vskip -0.1in
 \end{table}
 
-We also consider directly learning the preconditioning coefficients (Table~\ref{tab:learned-coeff-main}). When initialized from the Chebyshev values, the learned coefficients stay close to the initialization across all seeds (c$_2 \approx -1.03$) but consistently drift at other lags. When initialized from zero, the coefficients converge to a smoothly decaying pattern whose sign varies by seed but whose magnitude is consistent ($|c_1| \approx 0.31$, $|c_2| \approx 0.18$). Both learned variants beat Baseline, but fixed Chebyshev still performs best, suggesting a genuine inductive bias.
+We also consider directly learning the preconditioning coefficients (Table~\ref{tab:learned-coeff-main}). We perform two different initializations: one from the Chebyshev coefficients and one from zero. Both learned variants beat Baseline, but fixed Chebyshev still performs best, suggesting it is a good prior. 
+
+% When initialized from the Chebyshev values, the learned coefficients stay close to the initialization across all seeds (c$_2 \approx -1.03$) but consistently drift at other lags. When initialized from zero, the coefficients converge to a smoothly decaying pattern whose sign varies by seed but whose magnitude is consistent ($|c_1| \approx 0.31$, $|c_2| \approx 0.18$). 
+
+
 
 We also compare Chebyshev coefficients with coefficients obtained from Legendre polynomials, EMA, and finite differences and find that Chebyshev performs the best (Appendix~\ref{app:ablations}). We also perform other stride and dropout ablations.
 
-\paragraph{Horizon stratification.} On short horizons (Prediction Length (PL) $\leq 60$) \texttt{d4} and \texttt{d4\_dropout} are within $0.4\%$ of each other (Table~\ref{tab:horizon-main}). On medium and long horizons (PL $\geq 480$) \texttt{d4\_dropout} beats \texttt{d4} by $0.7$--$0.85\%$ relative MASE. The performance increase over baseline is greatest for the long horizon prediction tasks, where we attain a $5.3\%$ MASE reduction. This pattern is consistent with the training--inference mismatch created by autoregressive decoding: dropout makes \texttt{d4\_dropout} more robust when the preconditioning signal becomes partially synthetic at longer horizons.
+\paragraph{Horizon stratification.} On short horizons (Prediction Length (PL) $\leq 60$) \texttt{d4} and \texttt{d4\_dropout} are within $0.4\%$ of each other (Table~\ref{tab:horizon-main}). On medium and long horizons (PL $\geq 480$) \texttt{d4\_dropout} beats \texttt{d4} by $0.7$--$0.85\%$ relative MASE. The performance increase over baseline is greatest for the long horizon prediction tasks, where we attain a $5.3\%$ MASE reduction. This pattern is consistent with our hypothesis that dropout makes \texttt{d4\_dropout} more robust when the preconditioning signal becomes partially synthetic at longer horizons.
 
 \begin{table}[t]
 \caption{Horizon stratification (10K steps, 5 seeds). Geomean MASE; $\Delta\%$ relative to BL within each bin.}
@@ -613,13 +617,13 @@ Zero & 0.8917 & 0.8585 & 0.8750 & 0.8825 & 0.9610 & 0.8937 \\
 
 Two findings stand out. First, at a 100K-step budget, \texttt{d4\_dropout} remains substantially better than the matched baseline, with a larger relative MASE gap ($-3.9\%$ vs.\ $-2.9\%$ at 10K) and lower cross-seed variance. Second, the capacity controls that were near-neutral at 10K now actively hurt: Duplicate degrades by 0.9\% and Zero by 1.7\%. The baseline shows higher variance across seeds at 100K (seed 0 reaches 0.9092 due to late-training instability), while \texttt{d4\_dropout} remains stable (range 0.83--0.86).
 
-\subsection{Official Moirai 2.0 Schedule}
+\subsection{10K warmup}
 
-To verify that the benefit is not an artifact of our 1K-warmup schedule, we also train with the official Moirai 2.0 protocol (10K warmup, 100K total steps) across 5 seeds.
+To verify that the benefit is not an artifact of our 1K-warmup schedule, we also train with the 10K warmup steps across 5 seeds.
 
 \begin{table}[H]
 \centering
-\caption{Official Moirai 2.0 schedule (10K warmup, 100K steps, 5 seeds). Normalized geomean MASE per seed.}
+\caption{10K warmup, 100K steps, 5 seeds. Normalized geomean MASE per seed.}
 \label{tab:official-schedule}
 \small
 \begin{tabular}{lcccccc}

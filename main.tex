@@ -495,28 +495,6 @@ Duplicate & 0.8583 & $-0.96\%$ & 42/97 & 27/97 \\
 
 Chebyshev is best in this seed-0 sweep, while EMA is also competitive and finite differences are weakest.
 
-\subsection{Channel Dropout Rate (Chebyshev $d=4$, $s=16$)}
-
-\begin{table}[H]
-\centering
-\caption{Channel dropout ablation (seed 0, 10K steps, Chebyshev $d=4$, $s=16$).}
-\small
-\begin{tabular}{cccc}
-\toprule
-\textbf{Dropout} & \textbf{MASE} & \textbf{$\Delta$\% vs BL} & \textbf{Wins/97} \\
-\midrule
-0\% (\texttt{d4})$^\dagger$ & 0.8378 & $-3.5\%$ & --- \\
-2\% & 0.8388 & $-3.20\%$ & 63 \\
-3\% & 0.8497 & $-1.95\%$ & 55 \\
-\textbf{10\%} & \textbf{0.8234} & $\mathbf{-4.99\%}$ & \textbf{66} \\
-20\% & 0.8422 & $-2.81\%$ & 67 \\
-30\% & 0.8559 & $-1.23\%$ & 61 \\
-\bottomrule
-\end{tabular}
-\\[2pt]
-{\footnotesize $^\dagger$\texttt{d4} MASE is the 5-seed mean. \texttt{d4} and \texttt{d4\_dropout} are essentially tied; dropout helps marginally.}
-\end{table}
-
 \subsection{Learned Coefficients (5 seeds)}
 
 \begin{table}[H]
